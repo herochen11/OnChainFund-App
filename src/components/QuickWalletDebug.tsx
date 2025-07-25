@@ -25,7 +25,7 @@ export function QuickWalletDebug() {
   return (
     <div className="fixed bottom-4 right-4 z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-w-sm">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="font-semibold text-sm">Quick Debug</h3>
+        <h3 className="font-semibold text-sm">Wallet Debug</h3>
         <button
           onClick={() => setIsExpanded(false)}
           className="text-gray-500 hover:text-gray-700"

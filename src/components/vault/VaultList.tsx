@@ -45,37 +45,37 @@ function useVaultListByAccount(account?: Address) {
 }
 
 export function VaultList() {
-  // const account = useAccount();
-  // const vaults = useVaultListByAccount(account.address);
-  // const router = useRouter();
+  const account = useAccount();
+  const vaults = useVaultListByAccount(account.address);
+  const router = useRouter();
 
-  // return (
-  //   <div className="rounded-lg border shadow-md w-full mb-12">
-  //     <Table>
-  //       <TableHeader>
-  //         <TableRow>
-  //           <TableHead className="w-[100px]">Name</TableHead>
-  //           <TableHead className="w-[100px]">Symbol</TableHead>
-  //           <TableHead className="w-[100px]">Address</TableHead>
-  //           <TableHead className="w-[100px]">Deployment</TableHead>
-  //         </TableRow>
-  //       </TableHeader>
-  //       <TableBody>
-  //         {/* {vaults.data?.map((vault) => (
-  //           <TableRow
-  //             key={vault.address}
-  //             className="cursor-pointer"
-  //             onClick={() => router.push(`/${vault.deployment}/${vault.address}`)}
-  //             onMouseEnter={() => router.prefetch(`/${vault.deployment}/${vault.address}`)}
-  //           >
-  //             <TableCell className="font-medium">{vault.name}</TableCell>
-  //             <TableCell className="font-medium">{vault.symbol}</TableCell>
-  //             <TableCell className="font-medium">{vault.address}</TableCell>
-  //             <TableCell className="font-medium">{vault.deployment}</TableCell>
-  //           </TableRow>
-  //         ))} */}
-  //       </TableBody>
-  //     </Table>
-  //   </div>
-  // );
+  return (
+    <div className="rounded-lg border shadow-md w-full mb-12">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[100px]">Name</TableHead>
+            <TableHead className="w-[100px]">Symbol</TableHead>
+            <TableHead className="w-[100px]">Address</TableHead>
+            <TableHead className="w-[100px]">Deployment</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {/* {vaults.data?.map((vault) => (
+            <TableRow
+              key={vault.address}
+              className="cursor-pointer"
+              onClick={() => router.push(`/${vault.deployment}/${vault.address}`)}
+              onMouseEnter={() => router.prefetch(`/${vault.deployment}/${vault.address}`)}
+            >
+              <TableCell className="font-medium">{vault.name}</TableCell>
+              <TableCell className="font-medium">{vault.symbol}</TableCell>
+              <TableCell className="font-medium">{vault.address}</TableCell>
+              <TableCell className="font-medium">{vault.deployment}</TableCell>
+            </TableRow>
+          ))} */}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "./ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "../ui/command";
 import { type Deployment, deployments } from "@/lib/consts";
 import { VaultBasicInfoFragmentDoc, queryCoreSubgraph, useFragment } from "@/lib/gql";
 import { getPublicClientForDeployment } from "@/lib/rpc";
@@ -57,19 +57,19 @@ function useVaultSearch(deployment: Deployment, query: string) {
 }
 
 export function VaultSearch() {
-  // const [value, setValue] = useState("");
-  // const [debounced, setDebounced] = useState("");
-  // useDebounce(() => setDebounced(value), 250, [value]);
+  const [value, setValue] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useDebounce(() => setDebounced(value), 250, [value]);
 
-  // return (
-  //   <Command shouldFilter={false} className="rounded-lg border shadow-md" loop={true}>
-  //     <CommandInput placeholder="Search vaults ..." onValueChange={(value) => setValue(value)} />
-  //     {/* <CommandEmpty>No vaults found.</CommandEmpty> */}
-  //     {deployments.map((deployment) => (
-  //       <VaultSearchDeploymentGroup key={deployment} deployment={deployment} query={debounced} />
-  //     ))}
-  //   </Command>
-  // );
+  return (
+    <Command shouldFilter={false} className="rounded-lg border shadow-md" loop={true}>
+      <CommandInput placeholder="Search vaults ..." onValueChange={(value) => setValue(value)} />
+      {/* <CommandEmpty>No vaults found.</CommandEmpty> */}
+      {/* {deployments.map((deployment) => (
+        <VaultSearchDeploymentGroup key={deployment} deployment={deployment} query={debounced} />
+      ))} */}
+    </Command>
+  );
 }
 
 function VaultSearchDeploymentGroup({ deployment, query }: { deployment: Deployment; query: string }) {

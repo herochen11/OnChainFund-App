@@ -1,14 +1,14 @@
 import { PageLayout } from "@/components/PageLayout";
-import { VaultList } from "@/components/VaultList";
-import { VaultSearch } from "@/components/VaultSearch";
+import { VaultList } from "@/components/vault/VaultList";
+import { VaultSearch } from "@/components/vault/VaultSearch";
 
 
 export default function RootPage() {
   return (
     <main>
       <PageLayout className="flex flex-col items-center p-24">
-        {/* <VaultList />
-        <VaultSearch /> */}
+        <VaultList />
+        <VaultSearch />
       </PageLayout>
     </main>
   );

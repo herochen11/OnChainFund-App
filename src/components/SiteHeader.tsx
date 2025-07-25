@@ -1,7 +1,8 @@
 import { ConnectButton } from "./ConnectButton";
-import { VaultSearch } from "./VaultSearch";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 
 export function SiteHeader() {
@@ -19,14 +20,19 @@ export function SiteHeader() {
         <div className="flex items-center justify-end space-x-4">
           <div className="flex items-center space-x-4 relative pl-60">
             <div className="flex-1 t-0 absolute top-0 left-0 w-60">
-              <VaultSearch />
             </div>
+            <Link href="/create-vault">
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Vault
+              </Button>
+            </Link>
             <ConnectButton />
             <ThemeToggle />
           </div>
         </div>
       </div>
-      {/* <div className="container h-32 items-center xs:flex-col md:hidden">
+      <div className="container h-32 items-center xs:flex-col md:hidden">
         <div className="flex justify-between w-full pt-4">
           <Link
             className="inline-flex flex-none items-center justify-center"
@@ -41,14 +47,19 @@ export function SiteHeader() {
         <div className="flex items-center justify-end space-x-4 relative w-full pt-4">
           <div className="flex items-center space-x-4 relative pl-[50%]">
             <div className="flex-1 t-0 absolute top-0 left-0 w-1/2">
-              <VaultSearch />
             </div>
+            <Link href="/create-vault">
+              <Button variant="secondary" size="sm" className="text-xs">
+                <Plus className="h-3 w-3 mr-1" />
+                Create
+              </Button>
+            </Link>
             <div className="[&>button]:text-xs">
               <ConnectButton />
             </div>
           </div>
         </div>
-      </div> */}
+      </div>
     </header>
   );
 }
