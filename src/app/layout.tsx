@@ -2,7 +2,8 @@ import "@/lib/styles/globals.css";
 
 import { SiteHeader } from "@/components/SiteHeader";
 import { Providers } from "@/components/providers/Providers";
-import { QuickWalletDebug } from "@/components/QuickWalletDebug";
+import { QuickWalletDebug } from "@/components/debug/QuickWalletDebug";
+import { DeploymentDebug } from "@/components/debug/DeploymentDebug";
 import { fontSans } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
@@ -34,6 +35,7 @@ export default function RootLayout({
             <SiteHeader />
             <div className="flex-1">{children}</div>
             <QuickWalletDebug />
+            <DeploymentDebug />
           </div>
         </Providers>
       </body>

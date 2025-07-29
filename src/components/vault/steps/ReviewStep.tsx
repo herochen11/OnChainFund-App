@@ -3,13 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { SelectOption } from "@/components/ui/select";
-
-// Asset options for display
-const ASSET_OPTIONS: SelectOption[] = [
-  { value: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", label: "WETH - Wrapped Ether" },
-  { value: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", label: "WBTC - Wrapped Bitcoin" },
-  { value: "0x6B175474E89094C44Da98b954EedeAC495271d0F", label: "DAI - Dai Stablecoin" },
-];
+import { getAssetOptions, getAssetDisplayName } from "@/lib/assets";
+import { type Deployment } from "@/lib/consts";
+import { useMemo } from "react";
 
 // Fee types for display
 const FEE_TYPES = [
@@ -30,9 +26,20 @@ const POLICY_TYPES: SelectOption[] = [
 interface ReviewStepProps {
   watchedValues: any;
   policies: { type: string; settings: string }[];
+  deployment?: Deployment;
 }
 
-export function ReviewStep({ watchedValues, policies }: ReviewStepProps) {
+export function ReviewStep({ watchedValues, policies, deployment = "ethereum" }: ReviewStepProps) {
+  // Generate asset options dynamically using getContract
+  const assetOptions = useMemo(() => {
+    return getAssetOptions(deployment);
+  }, [deployment]);
+
+  const selectedAssetLabel = useMemo(() => {
+    if (!watchedValues.denominationAsset) return "Not set";
+    return getAssetDisplayName(watchedValues.denominationAsset, deployment);
+  }, [watchedValues.denominationAsset, deployment]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -57,7 +64,7 @@ export function ReviewStep({ watchedValues, policies }: ReviewStepProps) {
               </div>
               <div className="col-span-2">
                 <Label className="text-sm text-muted-foreground">Denomination Asset</Label>
-                <p className="font-medium">{ASSET_OPTIONS.find(a => a.value === watchedValues.denominationAsset)?.label || "Not set"}</p>
+                <p className="font-medium">{selectedAssetLabel}</p>
               </div>
             </div>
           </CardContent>

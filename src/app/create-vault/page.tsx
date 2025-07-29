@@ -5,7 +5,7 @@ export default function CreateVaultPage() {
   return (
     <main>
       <PageLayout>
-        <CreateVaultForm deployment="ethereum" />
+        <CreateVaultForm />
       </PageLayout>
     </main>
   );

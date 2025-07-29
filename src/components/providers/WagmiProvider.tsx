@@ -19,7 +19,7 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 
 // Define chains array with proper typing
-const chains = [mainnet, sepolia];
+const chains = [mainnet, polygon, sepolia];
 
 // supported wallet setup
 const getWallets = () => {

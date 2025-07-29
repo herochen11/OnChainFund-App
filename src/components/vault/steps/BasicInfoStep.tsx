@@ -2,25 +2,39 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, type SelectOption } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
+import { getAssetOptions, getDeploymentDisplayName, getAssetDisplayName } from "@/lib/assets";
+import { type Deployment } from "@/lib/consts";
 import { Info } from "lucide-react";
 import { UseFormRegister, UseFormSetValue, FieldErrors } from "react-hook-form";
-
-// Asset options for now - WETH, WBTC, DAI
-const ASSET_OPTIONS: SelectOption[] = [
-  { value: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", label: "WETH - Wrapped Ether" },
-  { value: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", label: "WBTC - Wrapped Bitcoin" },
-  { value: "0x6B175474E89094C44Da98b954EedeAC495271d0F", label: "DAI - Dai Stablecoin" },
-];
+import { useMemo } from "react";
 
 interface BasicInfoStepProps {
   register: UseFormRegister<any>;
   setValue: UseFormSetValue<any>;
   watchedValues: any;
   errors: FieldErrors<any>;
+  deployment?: Deployment;
 }
 
-export function BasicInfoStep({ register, setValue, watchedValues, errors }: BasicInfoStepProps) {
+export function BasicInfoStep({
+  register,
+  setValue,
+  watchedValues,
+  errors,
+  deployment
+}: BasicInfoStepProps) {
+
+  // Generate asset options dynamically using getContract
+  const assetOptions = useMemo(() => {
+    return getAssetOptions(deployment);
+  }, [deployment]);
+
+  const selectedAssetLabel = useMemo(() => {
+    if (!watchedValues.denominationAsset) return null;
+    return getAssetDisplayName(watchedValues.denominationAsset, deployment);
+  }, [watchedValues.denominationAsset, deployment]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -60,7 +74,7 @@ export function BasicInfoStep({ register, setValue, watchedValues, errors }: Bas
         <div className="space-y-2">
           <Label htmlFor="denominationAsset">Denomination Asset</Label>
           <Select
-            options={ASSET_OPTIONS}
+            options={assetOptions}
             placeholder="Select denomination asset"
             value={watchedValues.denominationAsset}
             onChange={(value) => setValue("denominationAsset", value)}
@@ -73,16 +87,22 @@ export function BasicInfoStep({ register, setValue, watchedValues, errors }: Bas
             <Info className="h-4 w-4" />
             <span>The asset users will deposit to invest in this vault</span>
           </div>
+          <div className="text-xs text-muted-foreground">
+            Network: {getDeploymentDisplayName(deployment)}
+          </div>
         </div>
 
-        {watchedValues.denominationAsset && (
+        {watchedValues.denominationAsset && selectedAssetLabel && (
           <div className="p-4 bg-muted/50 rounded-lg">
             <h3 className="font-medium mb-2">Selected Asset Details</h3>
             <p className="text-sm text-muted-foreground">
-              {ASSET_OPTIONS.find(asset => asset.value === watchedValues.denominationAsset)?.label}
+              {selectedAssetLabel}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Contract: {watchedValues.denominationAsset}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Network: {getDeploymentDisplayName(deployment)}
             </p>
           </div>
         )}

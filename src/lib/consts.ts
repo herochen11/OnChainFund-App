@@ -44,6 +44,9 @@ type Contracts = {
   OnlyUntrackDustOrPricelessAssets: Address;
   PerformanceFee: Address;
   Usdc: Address;
+  WETH: Address;
+  WBTC: Address;
+  DAI: Address;
 };
 
 const contracts: {
@@ -74,6 +77,9 @@ const contracts: {
     OnlyUntrackDustOrPricelessAssets: "0x747beaee139fba4a89fa71bebb5f21231530292b",
     PerformanceFee: "0xfedc73464dfd156d30f6524654a5d56e766da0c3",
     Usdc: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    WBTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
   },
   polygon: {
     AllowedAdaptersPolicy: "0x4218783ae10bd1841e6664cf048ac295d8d27a4a",
@@ -100,6 +106,9 @@ const contracts: {
     OnlyUntrackDustOrPricelessAssets: "0x9f856372f7bd844dac0254c7859b117259b5c9d2",
     PerformanceFee: "0xbc63afe28c66a6279bd3a55a4d0d3ab61f479bdf",
     Usdc: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    WBTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
   },
   testnet: {
     AllowedAdaptersPolicy: "0x35cf5a1fe0254f863c9f6c0cd5c2128ee61baf58",
@@ -125,7 +134,10 @@ const contracts: {
     OnlyRemoveDustExternalPositionPolicy: "0x713e7dac3c237b71dd54a8718ce21ecd5d2dc747",
     OnlyUntrackDustOrPricelessAssets: "0xc1f7b231874e2f9b2c9d4ec701dc6f046eab253a",
     PerformanceFee: "0xf1fcba510713355d7504b87a163420a2bd116a4b",
-    Usdc: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+    Usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    WBTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
   },
 };
 

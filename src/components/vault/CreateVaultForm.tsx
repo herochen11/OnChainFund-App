@@ -3,15 +3,17 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { type Deployment } from "@/lib/consts";
+import { useDeployment } from "@/lib/hooks/useDeployment";
 import { BasicInfoStep } from "./steps/BasicInfoStep";
 import { FeeConfigStep } from "./steps/FeeConfigStep";
 import { PolicyConfigStep } from "./steps/PolicyConfigStep";
 import { ReviewStep } from "./steps/ReviewStep";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface CreateVaultFormProps {
   deployment: Deployment;
@@ -78,6 +80,11 @@ const STEPS = [
 ];
 
 export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
+  const deploymentState = useDeployment();
+
+  // Use the detected deployment from wallet, fallback to prop
+  const currentDeployment = deploymentState.deployment || deployment;
+
   const [currentStep, setCurrentStep] = useState(0);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0])); // Track visited steps
   const [policies, setPolicies] = useState<{ type: string; settings: string }[]>([]);
@@ -136,37 +143,49 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   };
 
   const onSubmit = async (data: CreateVaultFormData) => {
-    // try {
-    //   console.log("Creating vault with data:", data);
+    // Check if on supported network
+    if (deploymentState.needsNetworkSwitch) {
+      alert('Please switch to a supported network (Ethereum, Polygon, or Sepolia) first');
+      return;
+    }
 
-    //   // Use your custom SDK
-    //   const { deployNewFund } = await import('@yourorg/enzyme-sdk-custom');
-    //   const { useAccount } = await import('wagmi');
+    try {
+      console.log("Creating vault with data:", data);
+      console.log("Current deployment:", currentDeployment);
+      console.log("Chain ID:", deploymentState.chainId);
 
-    //   // Get connected wallet address
-    //   const { address } = useAccount();
-    //   if (!address) {
-    //     alert('Please connect your wallet first');
-    //     return;
-    //   }
+      // TODO: Uncomment when custom SDK is ready
+      // Use your custom SDK
+      // const { deployNewFund } = await import('@yourorg/enzyme-sdk-custom');
+      // const { useAccount } = await import('wagmi');
 
-    //   // Deploy using your custom SDK (same API as original)
-    //   const result = await deployNewFund({
-    //     fundOwner: address,
-    //     fundName: data.vaultName,
-    //     fundSymbol: data.vaultSymbol,
-    //     denominationAsset: data.denominationAsset,
-    //     feeManagerConfigData: prepareFeeConfig(data.fees),
-    //     policyManagerConfigData: preparePolicyConfig(data.policies),
-    //   });
+      // Get connected wallet address
+      // const { address } = useAccount();
+      // if (!address) {
+      //   alert('Please connect your wallet first');
+      //   return;
+      // }
 
-    //   console.log('Vault deployed successfully:', result);
-    //   alert(`Vault deployed successfully!\nComptroller: ${result.comptrollerProxy}\nVault: ${result.vaultProxy}\nTx: ${result.transactionHash}`);
+      // Deploy using your custom SDK (same API as original)
+      // const result = await deployNewFund({
+      //   fundOwner: address,
+      //   fundName: data.vaultName,
+      //   fundSymbol: data.vaultSymbol,
+      //   denominationAsset: data.denominationAsset,
+      //   feeManagerConfigData: prepareFeeConfig(data.fees),
+      //   policyManagerConfigData: preparePolicyConfig(data.policies),
+      // });
 
-    // } catch (error) {
-    //   console.error('Vault deployment failed:', error);
-    //   alert(`Vault deployment failed: ${error.message}`);
-    // }
+      // console.log('Vault deployed successfully:', result);
+      // alert(`Vault deployed successfully!\nComptroller: ${result.comptrollerProxy}\nVault: ${result.vaultProxy}\nTx: ${result.transactionHash}`);
+
+      // For now, just show the data being submitted
+      alert(`Vault creation initiated!\nDeployment: ${currentDeployment}\nChain ID: ${deploymentState.chainId}\nVault Name: ${data.vaultName}\nSymbol: ${data.vaultSymbol}`);
+
+    } catch (error) {
+      console.error('Vault deployment failed:', error);
+      alert(`Vault deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   // Helper functions to prepare config data
@@ -215,6 +234,7 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
             setValue={setValue}
             watchedValues={watchedValues}
             errors={errors}
+            deployment={currentDeployment}
           />
         );
 
@@ -240,6 +260,7 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
           <ReviewStep
             watchedValues={watchedValues}
             policies={policies}
+            deployment={currentDeployment}
           />
         );
 
@@ -254,6 +275,27 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
         <h1 className="text-3xl font-bold mb-2">Create New Vault</h1>
         <p className="text-muted-foreground">Deploy a new on-chain asset management vault</p>
       </div>
+
+      {/* Network Status Alert */}
+      {/* {deploymentState.isConnected && (
+        <div className="mb-6">
+          {deploymentState.needsNetworkSwitch ? (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-700">
+                <strong>Unsupported Network!</strong> Please switch to Ethereum, Polygon, or Sepolia testnet to create vaults.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Check className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700">
+                <strong>Connected to {deploymentState.chainId === 1 ? 'Ethereum' : deploymentState.chainId === 137 ? 'Polygon' : 'Sepolia'}:</strong> Assets will be loaded for this network.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Step Navigation */}
@@ -316,8 +358,17 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
               </Button>
 
               {currentStep === STEPS.length - 1 ? (
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Creating Vault..." : "Create Vault"}
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || deploymentState.needsNetworkSwitch}
+                  className={deploymentState.needsNetworkSwitch ? "opacity-50" : ""}
+                >
+                  {isSubmitting
+                    ? "Creating Vault..."
+                    : deploymentState.needsNetworkSwitch
+                      ? "Switch Network to Create Vault"
+                      : "Create Vault"
+                  }
                 </Button>
               ) : (
                 <Button type="button" onClick={nextStep}>
