@@ -79,6 +79,7 @@ const STEPS = [
 
 export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0])); // Track visited steps
   const [policies, setPolicies] = useState<{ type: string; settings: string }[]>([]);
 
   const {
@@ -120,7 +121,9 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       if (!isValid) return;
     }
 
-    setCurrentStep(prev => Math.min(prev + 1, STEPS.length - 1));
+    const nextStepIndex = Math.min(currentStep + 1, STEPS.length - 1);
+    setCurrentStep(nextStepIndex);
+    setVisitedSteps(prev => new Set([...prev, nextStepIndex]));
   };
 
   const prevStep = () => {
@@ -129,21 +132,75 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
 
   const goToStep = (stepIndex: number) => {
     setCurrentStep(stepIndex);
+    setVisitedSteps(prev => new Set([...prev, stepIndex]));
   };
 
   const onSubmit = async (data: CreateVaultFormData) => {
-    console.log("Creating vault with data:", data);
-    alert("Vault creation functionality will be implemented here!");
+    // try {
+    //   console.log("Creating vault with data:", data);
+
+    //   // Use your custom SDK
+    //   const { deployNewFund } = await import('@yourorg/enzyme-sdk-custom');
+    //   const { useAccount } = await import('wagmi');
+
+    //   // Get connected wallet address
+    //   const { address } = useAccount();
+    //   if (!address) {
+    //     alert('Please connect your wallet first');
+    //     return;
+    //   }
+
+    //   // Deploy using your custom SDK (same API as original)
+    //   const result = await deployNewFund({
+    //     fundOwner: address,
+    //     fundName: data.vaultName,
+    //     fundSymbol: data.vaultSymbol,
+    //     denominationAsset: data.denominationAsset,
+    //     feeManagerConfigData: prepareFeeConfig(data.fees),
+    //     policyManagerConfigData: preparePolicyConfig(data.policies),
+    //   });
+
+    //   console.log('Vault deployed successfully:', result);
+    //   alert(`Vault deployed successfully!\nComptroller: ${result.comptrollerProxy}\nVault: ${result.vaultProxy}\nTx: ${result.transactionHash}`);
+
+    // } catch (error) {
+    //   console.error('Vault deployment failed:', error);
+    //   alert(`Vault deployment failed: ${error.message}`);
+    // }
+  };
+
+  // Helper functions to prepare config data
+  const prepareFeeConfig = (fees: CreateVaultFormData['fees']) => {
+    // Convert form data to SDK format
+    const enabledFees = Object.entries(fees)
+      .filter(([_, fee]) => fee.enabled)
+      .map(([feeType, fee]) => ({
+        feeType,
+        ...fee,
+      }));
+    return enabledFees;
+  };
+
+  const preparePolicyConfig = (policies: { type: string; settings: string }[]) => {
+    // Convert form data to SDK format
+    return policies;
   };
 
   const isStepCompleted = (stepIndex: number) => {
+    // Only mark as completed if user has visited the step AND meets requirements
+    if (!visitedSteps.has(stepIndex)) {
+      return false;
+    }
+
     switch (stepIndex) {
       case 0:
         return watchedValues.vaultName && watchedValues.vaultSymbol && watchedValues.denominationAsset;
       case 1:
-        return true; // Fees are optional
+        return true; // Fees are optional, mark complete if visited
       case 2:
-        return true; // Policies are optional
+        return true; // Policies are optional, mark complete if visited
+      case 3:
+        return true; // Review step, mark complete if visited
       default:
         return false;
     }
@@ -208,18 +265,18 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
                 type="button"
                 onClick={() => goToStep(index)}
                 className={`w-full text-left p-4 rounded-lg border transition-colors ${index === currentStep
-                    ? 'bg-primary/10 border-primary text-primary'
-                    : index < currentStep
-                      ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground hover:bg-muted'
-                      : 'border-border hover:bg-muted/50'
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : index < currentStep
+                    ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground hover:bg-muted'
+                    : 'border-border hover:bg-muted/50'
                   }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${index === currentStep
-                      ? 'bg-primary text-primary-foreground'
-                      : isStepCompleted(index)
-                        ? 'bg-green-500 text-white'
-                        : 'bg-muted text-muted-foreground'
+                    ? 'bg-primary text-primary-foreground'
+                    : isStepCompleted(index)
+                      ? 'bg-green-500 text-white'
+                      : 'bg-muted text-muted-foreground'
                     }`}>
                     {isStepCompleted(index) && index !== currentStep ? (
                       <Check className="h-4 w-4" />
