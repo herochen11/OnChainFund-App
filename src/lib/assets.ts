@@ -12,7 +12,7 @@ const SUPPORTED_ASSETS = [
   },
   {
     key: "WETH" as const,
-    label: "WETH - Wrapped Ether", 
+    label: "WETH - Wrapped Ether",
     symbol: "WETH"
   },
   {
@@ -24,6 +24,11 @@ const SUPPORTED_ASSETS = [
     key: "DAI" as const,
     label: "DAI - Dai Stablecoin",
     symbol: "DAI"
+  },
+  {
+    key: "ASVT" as const,
+    label: "ASVT - Asset Vault Token for Sepolia Testnet (RON)",
+    symbol: "ASVT"
   }
 ] as const;
 
@@ -34,7 +39,7 @@ const SUPPORTED_ASSETS = [
 export function getAssetOptions(deployment: Deployment): SelectOption[] {
   try {
     const options: SelectOption[] = [];
-    
+
     // Get all supported assets using getContract
     SUPPORTED_ASSETS.forEach(asset => {
       try {
@@ -103,7 +108,7 @@ export function getAssetSymbol(address: string, deployment: Deployment): string 
  */
 export function getSupportedAssetKeys(deployment: Deployment): Array<keyof typeof SUPPORTED_ASSETS[number]> {
   const availableKeys: Array<keyof typeof SUPPORTED_ASSETS[number]> = [];
-  
+
   SUPPORTED_ASSETS.forEach(asset => {
     try {
       getContract(deployment, asset.key);
@@ -112,7 +117,7 @@ export function getSupportedAssetKeys(deployment: Deployment): Array<keyof typeo
       // Asset not available in this deployment
     }
   });
-  
+
   return availableKeys;
 }
 
@@ -123,7 +128,7 @@ export function isAssetSupported(assetKey: string, deployment: Deployment): bool
   try {
     const asset = SUPPORTED_ASSETS.find(a => a.key === assetKey);
     if (!asset) return false;
-    
+
     getContract(deployment, asset.key);
     return true;
   } catch (error) {

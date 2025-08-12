@@ -6,14 +6,23 @@ import { type Deployment } from "@/lib/consts";
 import { useDeployment } from "@/lib/hooks/useDeployment";
 import { BasicInfoStep } from "./steps/BasicInfoStep";
 import { FeeConfigStep } from "./steps/FeeConfigStep";
-import { PolicyConfigStep } from "./steps/PolicyConfigStep";
+import { DepositsPolicyStep } from "./steps/DepositsPolicyStep";
+import { SharesTransferabilityStep } from "./steps/SharesTransferabilityStep";
+import { RedemptionsPolicyStep } from "./steps/RedemptionsPolicyStep";
+import { AssetManagementStep } from "./steps/AssetManagementStep";
 import { ReviewStep } from "./steps/ReviewStep";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { type Address } from 'viem';
+
+// Import Enzyme SDK
+import { LifeCycle } from "@enzymefinance/sdk";
+import { CUSTOM_SEPOLIA_ENVIRONMENT } from '@/config/sepolia-environment';
+import { waitForTransactionReceipt } from 'viem/actions';
 
 interface CreateVaultFormProps {
   deployment: Deployment;
@@ -68,9 +77,24 @@ const STEPS = [
     description: 'Management & performance'
   },
   {
-    id: 'policies',
-    title: 'Policies',
-    description: 'Investment rules'
+    id: 'deposits',
+    title: 'Deposits',
+    description: 'Deposit policies'
+  },
+  {
+    id: 'shares',
+    title: 'Shares transferability',
+    description: 'Share transfer rules'
+  },
+  {
+    id: 'redemptions',
+    title: 'Redemptions',
+    description: 'Redemption policies'
+  },
+  {
+    id: 'assets',
+    title: 'Asset management',
+    description: 'Asset policies'
   },
   {
     id: 'review',
@@ -81,12 +105,15 @@ const STEPS = [
 
 export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   const deploymentState = useDeployment();
+  const { address } = useAccount();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
 
   // Use the detected deployment from wallet, fallback to prop
   const currentDeployment = deploymentState.deployment || deployment;
 
   const [currentStep, setCurrentStep] = useState(0);
-  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0])); // Track visited steps
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [policies, setPolicies] = useState<{ type: string; settings: string }[]>([]);
 
   const {
@@ -114,12 +141,184 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
 
   const watchedValues = watch();
 
+  // Helper function to parse vault creation result from transaction logs
+  const parseVaultCreationResult = (logs: any[], txHash: string) => {
+    try {
+      console.log('Parsing transaction logs:', logs);
+
+      // Simple parsing - look for any relevant events
+      return {
+        success: true,
+        message: 'Vault created successfully! Check transaction for contract addresses.',
+        transactionHash: txHash,
+      };
+    } catch (error) {
+      console.error('Failed to parse vault creation result:', error);
+      return {
+        success: false,
+        message: 'Vault creation transaction completed, but could not parse result from logs',
+        transactionHash: txHash,
+        error: error instanceof Error ? error.message : 'Unknown parsing error'
+      };
+    }
+  };
+
+  // Main vault creation function using Enzyme SDK
+  const onSubmit = async (data: CreateVaultFormData) => {
+    console.log('=== VAULT CREATION DEBUG ===');
+
+    // Check if on supported network
+    if (deploymentState.needsNetworkSwitch) {
+      alert('Please switch to a supported network (Ethereum, Polygon, or Sepolia) first');
+      return;
+    }
+
+    if (!address) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    if (!publicClient || !walletClient) {
+      alert('Wallet client not available');
+      return;
+    }
+
+    try {
+      // Debug all the inputs
+      console.log("Form data:", data);
+      console.log("Connected address:", address);
+      console.log("Environment:", CUSTOM_SEPOLIA_ENVIRONMENT);
+      console.log("Fund Deployer:", CUSTOM_SEPOLIA_ENVIRONMENT.contracts?.fundDeployer);
+
+      // Validate required fields
+      if (!data.vaultName || !data.vaultSymbol || !data.denominationAsset) {
+        throw new Error('Missing required fields: vaultName, vaultSymbol, or denominationAsset');
+      }
+
+      // Prepare parameters with detailed logging
+      const vaultParams = {
+        fundDeployer: CUSTOM_SEPOLIA_ENVIRONMENT.contracts.fundDeployer,
+        owner: address,
+        name: data.vaultName,
+        symbol: data.vaultSymbol,
+        denominationAsset: data.denominationAsset as Address,
+        sharesActionTimelockInSeconds: 0n,
+        feeManagerConfigData: '0x' as const,
+        policyManagerConfigData: '0x' as const,
+      };
+
+      console.log("Vault parameters:", vaultParams);
+
+      // Check each parameter
+      Object.entries(vaultParams).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') {
+          console.error(`❌ Parameter ${key} is invalid:`, value);
+          throw new Error(`Parameter ${key} is ${value}`);
+        }
+        console.log(`✅ ${key}:`, value);
+      });
+
+      console.log("Creating vault transaction with SDK...");
+
+      // Create vault transaction using Enzyme SDK
+      const vaultTransaction = LifeCycle.createVault(vaultParams);
+
+      // Execute the transaction - Debug each property first
+      console.log("Pre-execution debugging:");
+      console.log("- vaultTransaction:", vaultTransaction);
+      console.log("- vaultTransaction.params:", vaultTransaction.params);
+      console.log("- address:", vaultTransaction.params?.address);
+      console.log("- abi:", vaultTransaction.params?.abi);
+      console.log("- abi length:", vaultTransaction.params?.abi?.length);
+      console.log("- functionName:", vaultTransaction.params?.functionName);
+      console.log("- args:", vaultTransaction.params?.args);
+      console.log("- args length:", vaultTransaction.params?.args?.length);
+
+      // Extract transaction parameters correctly
+      const txParams = vaultTransaction.params;
+
+      // Validate each property before using it
+      if (!txParams?.address) {
+        throw new Error('Transaction address is undefined');
+      }
+      if (!txParams?.abi) {
+        throw new Error('Transaction ABI is undefined');
+      }
+      if (!txParams?.functionName) {
+        throw new Error('Transaction functionName is undefined');
+      }
+      if (!txParams?.args) {
+        throw new Error('Transaction args is undefined');
+      }
+
+      console.log("✅ All transaction properties validated");
+      console.log("Executing transaction...");
+
+      const hash = await walletClient.writeContract({
+        address: txParams.address,
+        abi: txParams.abi,
+        functionName: txParams.functionName,
+        args: txParams.args,
+      });
+
+      console.log('✅ Transaction submitted:', hash);
+
+      // Wait for transaction confirmation
+      const receipt = await waitForTransactionReceipt(publicClient, {
+        hash,
+        confirmations: 1
+      });
+
+      console.log('✅ Transaction confirmed:', receipt);
+
+      // Parse the result (simplified for now)
+      const result = parseVaultCreationResult(receipt.logs, hash);
+
+      // Show success message
+      alert(`✅ Vault Created Successfully using Enzyme SDK!
+
+Vault Name: ${data.vaultName}
+Symbol: ${data.vaultSymbol}
+Owner: ${address}
+Network: ${currentDeployment}
+
+🔗 Transaction: ${hash}
+
+Check Sepolia Etherscan:
+https://sepolia.etherscan.io/tx/${hash}
+
+${result.message}`);
+
+    } catch (error) {
+      console.error('=== VAULT CREATION ERROR ===');
+      console.error('Full error object:', error);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      alert(`❌ Vault creation failed: ${errorMessage}
+
+Check the browser console for detailed error information.`);
+    }
+  };
+
   const nextStep = async () => {
     let fieldsToValidate: (keyof CreateVaultFormData)[] = [];
 
     switch (currentStep) {
       case 0:
         fieldsToValidate = ['vaultName', 'vaultSymbol', 'denominationAsset'];
+        break;
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+      case 5:
+        // Other steps are optional for now
         break;
     }
 
@@ -142,71 +341,7 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
     setVisitedSteps(prev => new Set([...prev, stepIndex]));
   };
 
-  const onSubmit = async (data: CreateVaultFormData) => {
-    // Check if on supported network
-    if (deploymentState.needsNetworkSwitch) {
-      alert('Please switch to a supported network (Ethereum, Polygon, or Sepolia) first');
-      return;
-    }
-
-    try {
-      console.log("Creating vault with data:", data);
-      console.log("Current deployment:", currentDeployment);
-      console.log("Chain ID:", deploymentState.chainId);
-
-      // TODO: Uncomment when custom SDK is ready
-      // Use your custom SDK
-      // const { deployNewFund } = await import('@yourorg/enzyme-sdk-custom');
-      // const { useAccount } = await import('wagmi');
-
-      // Get connected wallet address
-      // const { address } = useAccount();
-      // if (!address) {
-      //   alert('Please connect your wallet first');
-      //   return;
-      // }
-
-      // Deploy using your custom SDK (same API as original)
-      // const result = await deployNewFund({
-      //   fundOwner: address,
-      //   fundName: data.vaultName,
-      //   fundSymbol: data.vaultSymbol,
-      //   denominationAsset: data.denominationAsset,
-      //   feeManagerConfigData: prepareFeeConfig(data.fees),
-      //   policyManagerConfigData: preparePolicyConfig(data.policies),
-      // });
-
-      // console.log('Vault deployed successfully:', result);
-      // alert(`Vault deployed successfully!\nComptroller: ${result.comptrollerProxy}\nVault: ${result.vaultProxy}\nTx: ${result.transactionHash}`);
-
-      // For now, just show the data being submitted
-      alert(`Vault creation initiated!\nDeployment: ${currentDeployment}\nChain ID: ${deploymentState.chainId}\nVault Name: ${data.vaultName}\nSymbol: ${data.vaultSymbol}`);
-
-    } catch (error) {
-      console.error('Vault deployment failed:', error);
-      alert(`Vault deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  // Helper functions to prepare config data
-  const prepareFeeConfig = (fees: CreateVaultFormData['fees']) => {
-    // Convert form data to SDK format
-    const enabledFees = Object.entries(fees)
-      .filter(([_, fee]) => fee.enabled)
-      .map(([feeType, fee]) => ({
-        feeType,
-        ...fee,
-      }));
-    return enabledFees;
-  };
-
-  const preparePolicyConfig = (policies: { type: string; settings: string }[]) => {
-    // Convert form data to SDK format
-    return policies;
-  };
-
   const isStepCompleted = (stepIndex: number) => {
-    // Only mark as completed if user has visited the step AND meets requirements
     if (!visitedSteps.has(stepIndex)) {
       return false;
     }
@@ -214,14 +349,8 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
     switch (stepIndex) {
       case 0:
         return watchedValues.vaultName && watchedValues.vaultSymbol && watchedValues.denominationAsset;
-      case 1:
-        return true; // Fees are optional, mark complete if visited
-      case 2:
-        return true; // Policies are optional, mark complete if visited
-      case 3:
-        return true; // Review step, mark complete if visited
       default:
-        return false;
+        return true; // Other steps are optional for basic vault creation
     }
   };
 
@@ -237,7 +366,6 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
             deployment={currentDeployment}
           />
         );
-
       case 1:
         return (
           <FeeConfigStep
@@ -245,17 +373,25 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
             setValue={setValue}
           />
         );
-
       case 2:
         return (
-          <PolicyConfigStep
-            policies={policies}
-            setPolicies={setPolicies}
+          <DepositsPolicyStep
+            watchedValues={watchedValues}
             setValue={setValue}
           />
         );
-
       case 3:
+        return (
+          <SharesTransferabilityStep
+            watchedValues={watchedValues}
+            setValue={setValue}
+          />
+        );
+      case 4:
+        return <RedemptionsPolicyStep />;
+      case 5:
+        return <AssetManagementStep />;
+      case 6:
         return (
           <ReviewStep
             watchedValues={watchedValues}
@@ -263,7 +399,6 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
             deployment={currentDeployment}
           />
         );
-
       default:
         return null;
     }
@@ -273,29 +408,8 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
     <div className="container max-w-6xl mx-auto py-8 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Create New Vault</h1>
-        <p className="text-muted-foreground">Deploy a new on-chain asset management vault</p>
+        <p className="text-muted-foreground">Deploy a new on-chain asset management vault using Enzyme SDK</p>
       </div>
-
-      {/* Network Status Alert */}
-      {/* {deploymentState.isConnected && (
-        <div className="mb-6">
-          {deploymentState.needsNetworkSwitch ? (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700">
-                <strong>Unsupported Network!</strong> Please switch to Ethereum, Polygon, or Sepolia testnet to create vaults.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert className="border-blue-200 bg-blue-50">
-              <Check className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-700">
-                <strong>Connected to {deploymentState.chainId === 1 ? 'Ethereum' : deploymentState.chainId === 137 ? 'Polygon' : 'Sepolia'}:</strong> Assets will be loaded for this network.
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-      )} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Step Navigation */}
@@ -364,10 +478,10 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
                   className={deploymentState.needsNetworkSwitch ? "opacity-50" : ""}
                 >
                   {isSubmitting
-                    ? "Creating Vault..."
+                    ? "Creating Vault with SDK..."
                     : deploymentState.needsNetworkSwitch
                       ? "Switch Network to Create Vault"
-                      : "Create Vault"
+                      : "Create Vault with Enzyme SDK"
                   }
                 </Button>
               ) : (

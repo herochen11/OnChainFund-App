@@ -1,160 +1,142 @@
-import { type Address, type PublicClient } from 'viem';
-import { writeContract, waitForTransaction } from 'viem/actions';
-import { getPublicClient } from '../rpc';
-import type { CreateVaultFormData } from '@/components/vault/CreateVaultForm';
+import { type Address } from 'viem';
+import { writeContract, waitForTransaction } from '@wagmi/core';
+// import { config } from '../cpmponents/providers/WagmiProvider'; // Your wagmi config
+import contractAddresses from '../../../Contractaddess.json';
 
-// Your custom contract addresses
-const CUSTOM_CONTRACTS = {
-  ethereum: {
-    FundDeployer: '0x...', // Your deployed contract address
-    ComptrollerLib: '0x...', // Your deployed contract address
-    VaultLib: '0x...', // Your deployed contract address
-  },
-  polygon: {
-    // Your polygon addresses
-  },
-  testnet: {
-    // Your testnet addresses
-  }
-} as const;
-
-// Your custom contract ABIs
+// ABI for createNewFund function - matches your provided ABI
 const FUND_DEPLOYER_ABI = [
-  // Add your contract ABI here
   {
-    name: 'createNewFund',
-    type: 'function',
+    type: "function",
+    name: "createNewFund",
     inputs: [
-      { name: 'fundOwner', type: 'address' },
-      { name: 'fundName', type: 'string' },
-      { name: 'fundSymbol', type: 'string' },
-      { name: 'denominationAsset', type: 'address' },
-      { name: 'sharesActionTimelock', type: 'uint256' },
-      { name: 'feeManagerConfigData', type: 'bytes' },
-      { name: 'policyManagerConfigData', type: 'bytes' },
+      { name: "_fundOwner", type: "address", internalType: "address" },
+      { name: "_fundName", type: "string", internalType: "string" },
+      { name: "_fundSymbol", type: "string", internalType: "string" },
+      { name: "_denominationAsset", type: "address", internalType: "address" },
+      { name: "_sharesActionTimelock", type: "uint256", internalType: "uint256" },
+      { name: "_feeManagerConfigData", type: "bytes", internalType: "bytes" },
+      { name: "_policyManagerConfigData", type: "bytes", internalType: "bytes" }
     ],
     outputs: [
-      { name: 'comptrollerProxy', type: 'address' },
-      { name: 'vaultProxy', type: 'address' },
+      { name: "comptrollerProxy_", type: "address", internalType: "address" },
+      { name: "vaultProxy_", type: "address", internalType: "address" }
     ],
-  },
+    stateMutability: "nonpayable"
+  }
 ] as const;
 
-export class CustomVaultDeploymentService {
-  private client: PublicClient;
-  private network: string;
+export interface BasicVaultConfig {
+  vaultName: string;
+  vaultSymbol: string;
+  denominationAsset: Address;
+  fundOwner: Address;
+}
 
-  constructor(network: 'ethereum' | 'polygon' | 'testnet') {
-    this.client = getPublicClient(network);
-    this.network = network;
+export interface VaultDeploymentResult {
+  comptrollerProxy: Address;
+  vaultProxy: Address;
+  transactionHash: string;
+}
+
+export class BasicVaultDeploymentService {
+  private getFundDeployerAddress(): Address {
+    // Find FundDeployer address from your contract addresses
+    const contracts = contractAddresses.deployed.contract;
+    const fundDeployerEntry = Object.entries(contracts).find(([_, name]) => name === "FundDeployer");
+    
+    if (!fundDeployerEntry) {
+      throw new Error("FundDeployer contract not found in contract addresses");
+    }
+    
+    return fundDeployerEntry[0] as Address;
   }
 
-  async deployVault(
-    config: CreateVaultFormData,
-    userAddress: Address
-  ): Promise<{ comptroller: Address; vault: Address; txHash: string }> {
+  async deployBasicVault(config: BasicVaultConfig): Promise<VaultDeploymentResult> {
     try {
-      // Prepare fee configuration data
-      const feeConfigData = this.prepareFeeConfig(config.fees);
+      const fundDeployerAddress = this.getFundDeployerAddress();
       
-      // Prepare policy configuration data  
-      const policyConfigData = this.preparePolicyConfig(config.policies);
+      // For basic vault creation with no fees and no policies, pass empty bytes
+      const emptyFeeConfig = '0x' as const;
+      const emptyPolicyConfig = '0x' as const;
+      
+      console.log('Deploying vault with config:', {
+        fundDeployer: fundDeployerAddress,
+        ...config,
+        feeConfig: emptyFeeConfig,
+        policyConfig: emptyPolicyConfig
+      });
 
-      // Deploy vault using your custom contract
-      const txHash = await writeContract(this.client, {
-        address: CUSTOM_CONTRACTS[this.network].FundDeployer,
+      // Call createNewFund on your custom contract
+      const hash = await writeContract(config, {
+        address: fundDeployerAddress,
         abi: FUND_DEPLOYER_ABI,
         functionName: 'createNewFund',
         args: [
-          userAddress, // Fund owner
+          config.fundOwner,
           config.vaultName,
           config.vaultSymbol,
-          config.denominationAsset as Address,
-          0n, // Shares action timelock (can be configured)
-          feeConfigData,
-          policyConfigData,
+          config.denominationAsset,
+          0n, // No shares action timelock
+          emptyFeeConfig, // No fees
+          emptyPolicyConfig, // No policies
         ],
       });
 
-      // Wait for transaction confirmation
-      const receipt = await waitForTransaction(this.client, { hash: txHash });
-      
-      // Parse the transaction logs to get deployed addresses
-      const { comptroller, vault } = this.parseDeploymentLogs(receipt.logs);
+      console.log('Transaction submitted:', hash);
 
-      return {
-        comptroller,
-        vault,
-        txHash,
-      };
+      // Wait for transaction confirmation
+      const receipt = await waitForTransaction(config, { hash });
+      
+      console.log('Transaction confirmed:', receipt);
+
+      // Parse logs to get deployed addresses
+      const result = this.parseVaultCreationLogs(receipt.logs, hash);
+      
+      return result;
     } catch (error) {
       console.error('Vault deployment failed:', error);
-      throw new Error(`Failed to deploy vault: ${error.message}`);
+      throw new Error(`Failed to deploy vault: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  private prepareFeeConfig(fees: CreateVaultFormData['fees']): `0x${string}` {
-    // Encode fee configuration according to your contract's expected format
-    // This will depend on your specific fee manager implementation
+  private parseVaultCreationLogs(logs: any[], txHash: string): VaultDeploymentResult {
+    // Look for NewFundCreated event in logs
+    // Event signature: NewFundCreated(address indexed creator, address vaultProxy, address comptrollerProxy)
     
-    const enabledFees = Object.entries(fees)
-      .filter(([_, fee]) => fee.enabled)
-      .map(([feeType, fee]) => ({
-        feeType,
-        ...fee,
-      }));
+    try {
+      // For now, return mock data - you'll need to implement proper log parsing
+      // based on the actual events emitted by your contract
+      
+      // Find the NewFundCreated event in logs
+      const newFundCreatedTopic = '0x...'; // You need to calculate this from your contract's event signature
+      
+      const relevantLog = logs.find(log => 
+        log.topics && log.topics[0] === newFundCreatedTopic
+      );
 
-    // Example encoding - adjust based on your contract
-    if (enabledFees.length === 0) {
-      return '0x';
+      if (relevantLog) {
+        // Parse the log data to extract addresses
+        // This is simplified - you'll need proper ABI decoding
+        const comptrollerProxy = relevantLog.topics[2] as Address; // Adjust based on actual event structure
+        const vaultProxy = relevantLog.topics[1] as Address; // Adjust based on actual event structure
+        
+        return {
+          comptrollerProxy,
+          vaultProxy,
+          transactionHash: txHash,
+        };
+      }
+      
+      // Fallback: try to extract from transaction receipt data
+      // This is a simplified approach - you should implement proper event parsing
+      throw new Error('Could not parse vault creation from transaction logs');
+      
+    } catch (error) {
+      console.error('Failed to parse logs:', error);
+      throw new Error('Failed to parse vault creation result from transaction');
     }
-
-    // You'll need to implement proper ABI encoding here
-    // This is just a placeholder structure
-    return '0x'; // Replace with actual encoded data
-  }
-
-  private preparePolicyConfig(policies: { type: string; settings: string }[]): `0x${string}` {
-    // Encode policy configuration according to your contract's expected format
-    
-    if (policies.length === 0) {
-      return '0x';
-    }
-
-    // You'll need to implement proper ABI encoding here
-    return '0x'; // Replace with actual encoded data
-  }
-
-  private parseDeploymentLogs(logs: any[]): { comptroller: Address; vault: Address } {
-    // Parse the transaction logs to extract deployed contract addresses
-    // This depends on the events your contract emits
-    
-    // Example implementation - adjust based on your contract events
-    const fundCreatedLog = logs.find(log => 
-      log.topics[0] === '0x...' // Your FundCreated event signature
-    );
-
-    if (!fundCreatedLog) {
-      throw new Error('Failed to parse deployment transaction');
-    }
-
-    // Decode the log data to get addresses
-    // This is pseudocode - implement based on your actual events
-    return {
-      comptroller: '0x...' as Address, // Extract from log
-      vault: '0x...' as Address, // Extract from log
-    };
   }
 }
 
-// Environment-based service factory
-export function createVaultDeploymentService(network: 'ethereum' | 'polygon' | 'testnet') {
-  const useCustomContracts = process.env.NEXT_PUBLIC_USE_CUSTOM_CONTRACTS === 'true';
-  
-  if (useCustomContracts) {
-    return new CustomVaultDeploymentService(network);
-  }
-  
-  // Return Enzyme SDK-based service (implement separately)
-  throw new Error('Enzyme SDK integration not implemented yet');
-}
+// Export singleton instance
+export const vaultDeploymentService = new BasicVaultDeploymentService();

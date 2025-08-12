@@ -1,4 +1,4 @@
-import { VaultTile } from "@/components/VaultTile";
+import { VaultTile } from "@/components/vault/VaultTile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Deployment, getContract } from "@/lib/consts";
 import { formatNumber } from "@/lib/format";

@@ -3,31 +3,37 @@ import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { GraphQLClient, type RequestDocument, type Variables } from "graphql-request";
 import { cache } from "react";
 
-export * from "@/lib/generated/gql";
-export * from "@/lib/generated/gql/graphql";
+// Configuration for your custom subgraph endpoints
+const CUSTOM_SUBGRAPH_ENDPOINTS = {
+  ethereum: "YOUR_ETHEREUM_SUBGRAPH_URL_HERE",
+  polygon: "YOUR_POLYGON_SUBGRAPH_URL_HERE",
+  testnet: "https://api.studio.thegraph.com/query/118506/on-chain-fund-vault-core/version/latest", // Replace with your actual Sepolia subgraph URL
+};
 
-const baseUrl = "https://api.thegraph.com/subgraphs/name/enzymefinance";
+// Set to true to use your custom subgraphs, false to use original Enzyme subgraphs
+
+function getSubgraphUrl(deployment: Deployment): string {
+  const endpoints = CUSTOM_SUBGRAPH_ENDPOINTS;
+
+  switch (deployment) {
+    case "ethereum":
+      return endpoints.ethereum;
+    case "polygon":
+      return endpoints.polygon;
+    case "testnet":
+      return endpoints.testnet;
+  }
+}
 
 export const getCoreSubgrahClient = cache(function getCoreSubgrahClient(deployment: Deployment) {
-  switch (deployment) {
-    case "ethereum": {
-      return new GraphQLClient(`${baseUrl}/enzyme-core`, {
-        fetch: fetch,
-      });
-    }
+  const url = getSubgraphUrl(deployment);
 
-    case "polygon": {
-      return new GraphQLClient(`${baseUrl}/enzyme-core-polygon`, {
-        fetch: fetch,
-      });
+  return new GraphQLClient(url, {
+    fetch: fetch,
+    headers: {
+      'Content-Type': 'application/json',
     }
-
-    case "testnet": {
-      return new GraphQLClient(`${baseUrl}/enzyme-core-testnet`, {
-        fetch: fetch,
-      });
-    }
-  }
+  });
 });
 
 export async function queryCoreSubgraph<TType, TVariables extends Variables = Variables>({
@@ -39,13 +45,67 @@ export async function queryCoreSubgraph<TType, TVariables extends Variables = Va
   return await client.request(document, variables);
 }
 
+// Simple fetch-based query function for your custom subgraph
+export async function querySubgraph<TData = any>(
+  deployment: Deployment,
+  query: string,
+  variables?: Record<string, any>
+): Promise<TData> {
+  const url = getSubgraphUrl(deployment);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+      variables,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const result = await response.json();
+
+  if (result.errors) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+  }
+
+  return result.data;
+}
+
 // rome-ignore lint/suspicious/noExplicitAny: this is fine ...
 export type QuerySubgraphParams<TType, TVariables extends Variables = Variables> = TVariables extends Record<any, never>
   ? {
-      variables?: never;
-      document: RequestDocument | TypedDocumentNode<TType, TVariables>;
-    }
+    variables?: never;
+    document: RequestDocument | TypedDocumentNode<TType, TVariables>;
+  }
   : {
-      variables: TVariables;
-      document: RequestDocument | TypedDocumentNode<TType, TVariables>;
-    };
+    variables: TVariables;
+    document: RequestDocument | TypedDocumentNode<TType, TVariables>;
+  };
+
+// Your vault data types
+export interface VaultData {
+  id: string;
+  vaultProxy: string;
+  comptrollerProxy: string;
+  fundName: string;
+  fundSymbol: string;
+  denominationAsset: string;
+  creator: {
+    id: string;
+  };
+  createdAtTimestamp?: string;
+}
+
+export interface AllVaultsResponse {
+  vaults: VaultData[];
+}
+
+export interface VaultsByCreatorResponse {
+  vaults: VaultData[];
+}
