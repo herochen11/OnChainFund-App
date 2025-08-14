@@ -8,7 +8,7 @@ export default function RootPage() {
     <main>
       <PageLayout className="flex flex-col items-center p-24">
         <VaultList />
-        <VaultSearch />
+        {/* <VaultSearch /> */}
       </PageLayout>
     </main>
   );

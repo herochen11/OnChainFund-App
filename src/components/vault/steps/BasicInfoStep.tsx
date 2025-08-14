@@ -8,12 +8,13 @@ import { type Deployment } from "@/lib/consts";
 import { Info } from "lucide-react";
 import { UseFormRegister, UseFormSetValue, FieldErrors } from "react-hook-form";
 import { useMemo } from "react";
+import type { CreateVaultFormData } from '@/types/vault';
 
 interface BasicInfoStepProps {
-  register: UseFormRegister<any>;
-  setValue: UseFormSetValue<any>;
-  watchedValues: any;
-  errors: FieldErrors<any>;
+  register: UseFormRegister<CreateVaultFormData>;
+  setValue: UseFormSetValue<CreateVaultFormData>;
+  watchedValues: CreateVaultFormData;
+  errors: FieldErrors<CreateVaultFormData>;
   deployment?: Deployment;
 }
 

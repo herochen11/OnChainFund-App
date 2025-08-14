@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { WalletAddressManager } from "@/components/WalletAddressManager";
 import { AlertTriangle, X } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
-import { UseFormSetValue, UseFormWatch } from "react-hook-form";
+import { UseFormSetValue } from "react-hook-form";
+import type { CreateVaultFormData } from '@/types/vault';
 
 interface SharesTransferabilityStepProps {
-  watchedValues: any;
-  setValue: UseFormSetValue<any>;
+  watchedValues: CreateVaultFormData;
+  setValue: UseFormSetValue<CreateVaultFormData>;
 }
 
 export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTransferabilityStepProps) {
@@ -26,27 +27,53 @@ export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTra
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  // Local state for shares transferability policies
-  const [restrictTransfersEnabled, setRestrictTransfersEnabled] = useState(false);
-  const [allowedRecipients, setAllowedRecipients] = useState<string[]>([]);
+  // Get shares policies from form data
+  const sharesPolicies = watchedValues.sharesPolicies || {};
+  const {
+    restrictSharesTransfer = false,
+    allowedTransferWallets = [],
+  } = sharesPolicies;
+
+  // Local state for disallow all transfers
   const [disallowAllTransfers, setDisallowAllTransfers] = useState(false);
 
-  // Update form state when policies change
-  React.useEffect(() => {
-    const policies = [];
-    
-    if (restrictTransfersEnabled) {
-      policies.push({
+  // Initialize form values
+  useEffect(() => {
+    if (sharesPolicies.restrictSharesTransfer === undefined) {
+      setValue("sharesPolicies.restrictSharesTransfer", false);
+    }
+    if (sharesPolicies.allowedTransferWallets === undefined) {
+      setValue("sharesPolicies.allowedTransferWallets", []);
+    }
+  }, [sharesPolicies, setValue]);
+
+  // Update policies when settings change
+  useEffect(() => {
+    if (restrictSharesTransfer) {
+      const policies = [...(watchedValues.policies || [])];
+      const existingPolicyIndex = policies.findIndex(p => p.type === 'AllowedSharesTransferRecipientsPolicy');
+      
+      const policyData = {
         type: 'AllowedSharesTransferRecipientsPolicy',
         settings: JSON.stringify({
-          allowedRecipients,
+          allowedRecipients: allowedTransferWallets,
           disallowAllTransfers
         })
-      });
-    }
+      };
 
-    setValue('policies', policies);
-  }, [restrictTransfersEnabled, allowedRecipients, disallowAllTransfers, setValue]);
+      if (existingPolicyIndex >= 0) {
+        policies[existingPolicyIndex] = policyData;
+      } else {
+        policies.push(policyData);
+      }
+
+      setValue('policies', policies);
+    } else {
+      // Remove the policy if disabled
+      const policies = (watchedValues.policies || []).filter(p => p.type !== 'AllowedSharesTransferRecipientsPolicy');
+      setValue('policies', policies);
+    }
+  }, [restrictSharesTransfer, allowedTransferWallets, disallowAllTransfers, setValue, watchedValues.policies]);
 
 
 
@@ -72,8 +99,8 @@ export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTra
             <CardTitle className="text-lg">Restrict Wallets Permitted To Receive A Share Transfer</CardTitle>
           </div>
           <Switch
-            checked={restrictTransfersEnabled}
-            onCheckedChange={setRestrictTransfersEnabled}
+            checked={restrictSharesTransfer}
+            onCheckedChange={(checked) => setValue("sharesPolicies.restrictSharesTransfer", checked)}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -89,7 +116,7 @@ export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTra
             </p>
           </div>
 
-          {restrictTransfersEnabled && (
+          {restrictSharesTransfer && (
             <>
               <Button variant="outline" size="sm" className="text-green-600 border-green-600">
                 Editable Setting
@@ -99,8 +126,8 @@ export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTra
                 <h4 className="font-medium text-blue-900">Restrict Wallets Permitted To Receive A Share Transfer</h4>
 
                 <WalletAddressManager
-                  addresses={allowedRecipients}
-                  setAddresses={setAllowedRecipients}
+                  addresses={allowedTransferWallets}
+                  setAddresses={(addresses) => setValue("sharesPolicies.allowedTransferWallets", addresses)}
                   placeholder="Enter address ..."
                   showOwnerButton={true}
                 />

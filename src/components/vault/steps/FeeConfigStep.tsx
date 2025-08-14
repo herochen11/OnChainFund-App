@@ -4,78 +4,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UseFormSetValue, UseFormWatch } from "react-hook-form";
+import { UseFormSetValue, FieldErrors } from "react-hook-form";
 import { useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
-
-// Define the structure for individual fee types
-interface FeeDetail {
-  enabled: boolean;
-  rate?: number; // For management, performance, entrance
-  inKindRate?: number; // Specific to exit fee
-  specificAssetRate?: number; // Specific to exit fee
-  recipient?: string; // For fees with a recipient
-  allocation?: string; // For fees with allocation (entrance, exit)
-}
-
-// Define the overall form data structure for fees
-interface FeesFormData {
-  fees?: {
-    management?: FeeDetail;
-    performance?: FeeDetail;
-    entrance?: FeeDetail;
-    exit?: FeeDetail;
-  };
-}
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { CreateVaultFormData, FeeTypeId } from '@/types/vault';
+import { FEE_TYPES } from '@/types/vault';
+import { type Address } from "viem";
 
 interface FeeConfigStepProps {
-  watchedValues: FeesFormData; // Now correctly typed
-  setValue: UseFormSetValue<FeesFormData>; // Now correctly typed
+  watchedValues: CreateVaultFormData;
+  setValue: UseFormSetValue<CreateVaultFormData>;
+  vaultOwnerAddress?: Address;
+  errors?: FieldErrors<CreateVaultFormData>;
 }
-
-// Fee types with descriptions
-const FEE_TYPES = [
-  {
-    id: "management",
-    label: "Management Fee",
-    title: "Charge Management Fee",
-    description: "If enabled, a flat fee measured as an annual percent of total assets under management. The management fee accrues continuously and is automatically paid out with every deposit and redemption.",
-    defaultRate: 2.0,
-    hasRecipient: true,
-    hasAllocation: false,
-    hasMultipleRates: false
-  },
-  {
-    id: "performance",
-    label: "Performance Fee",
-    title: "Charge Performance Fee",
-    description: "If enabled, measured based on the vault's performance. The performance fee is subject to a high-water mark.",
-    defaultRate: 20.0,
-    hasRecipient: true,
-    hasAllocation: false,
-    hasMultipleRates: false
-  },
-  {
-    id: "entrance",
-    label: "Entrance Fee",
-    title: "Charge Entrance Fee",
-    description: "If enabled, entrance fees are charged with every new deposit.",
-    defaultRate: 0.5,
-    hasRecipient: false,
-    hasAllocation: true,
-    hasMultipleRates: false
-  },
-  {
-    id: "exit",
-    label: "Exit Fee",
-    title: "Charge Exit Fee",
-    description: "If enabled, exit fees are charged with every redemption. This fee is set separately for in-kind redemptions or for specific asset redemptions.",
-    defaultRate: 0.5, // This default rate is less relevant for multiple rates, but kept for consistency
-    hasRecipient: false, // Recipient is dependent on allocation for exit fee
-    hasAllocation: true,
-    hasMultipleRates: true
-  },
-];
 
 // Fee allocation options
 const FEE_ALLOCATION_OPTIONS: SelectOption[] = [
@@ -83,42 +24,45 @@ const FEE_ALLOCATION_OPTIONS: SelectOption[] = [
   { value: "manager", label: "Manager or other recipient" },
 ];
 
-export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
+export function FeeConfigStep({ watchedValues, setValue, vaultOwnerAddress, errors }: FeeConfigStepProps) {
 
   // Use useEffect to set initial default values for each fee type if they are undefined.
-  // This ensures that react-hook-form has a starting state for these fields.
   useEffect(() => {
+    console.log("Initializing fee configuration defaults...");
+    console.log("VaultOwner Address:", vaultOwnerAddress);
     FEE_TYPES.forEach((feeType) => {
-      const feePath = `fees.${feeType.id}`;
+      const currentFee = watchedValues.fees[feeType.id];
+
       // Initialize enabled state
-      if (watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.enabled === undefined) {
-        setValue(`${feePath}.enabled`, false);
+      if (currentFee?.enabled === undefined) {
+        setValue(`fees.${feeType.id}.enabled` as any, false);
       }
-      // Initialize rates based on whether it has multiple rates or a single rate
+
+      // Initialize rates as empty strings to allow proper placeholder behavior
       if (feeType.hasMultipleRates) {
-        if (watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.inKindRate === undefined) {
-          setValue(`${feePath}.inKindRate`, 1.0); // Default for in-kind exit fee
+        if (currentFee?.inKindRate === undefined) {
+          setValue(`fees.${feeType.id}.inKindRate` as any, "");
         }
-        if (watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.specificAssetRate === undefined) {
-          setValue(`${feePath}.specificAssetRate`, 5.0); // Default for specific asset exit fee
+        if (currentFee?.specificAssetRate === undefined) {
+          setValue(`fees.${feeType.id}.specificAssetRate` as any, "");
         }
       } else {
-        if (watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.rate === undefined) {
-          setValue(`${feePath}.rate`, feeType.defaultRate);
+        if (currentFee?.rate === undefined) {
+          setValue(`fees.${feeType.id}.rate` as any, "");
         }
       }
+
       // Initialize allocation if applicable
-      if (feeType.hasAllocation && watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.allocation === undefined) {
-        setValue(`${feePath}.allocation`, "vault"); // Default allocation
+      if (feeType.hasAllocation && currentFee?.allocation === undefined) {
+        setValue(`fees.${feeType.id}.allocation` as any, "vault");
       }
+
       // Initialize recipient if applicable
-      // Note: Recipient is only relevant if hasRecipient is true OR if hasAllocation is true AND allocation is 'manager'
-      if (feeType.hasRecipient && watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees]?.recipient === undefined) {
-        setValue(`${feePath}.recipient`, "");
+      if (feeType.hasRecipient && currentFee?.recipient === undefined) {
+        setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
       }
     });
   }, [watchedValues, setValue]);
-
 
   return (
     <div className="space-y-8">
@@ -132,12 +76,10 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
 
       <div className="space-y-8">
         {FEE_TYPES.map((feeType) => {
-          // Get the current fee state from watchedValues for this specific feeType
-          const currentFeeState = watchedValues.fees?.[feeType.id as keyof typeof watchedValues.fees];
+          const currentFeeState = watchedValues.fees[feeType.id];
           const isEnabled = currentFeeState?.enabled || false;
 
           return (
-            // Each fee type is now wrapped in a Card component
             <Card key={feeType.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div>
@@ -146,22 +88,27 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                 <Switch
                   checked={isEnabled}
                   onCheckedChange={(enabled) => {
-                    setValue(`fees.${feeType.id}.enabled`, enabled);
-                    // When enabling, set default rate(s) if not already set
+                    setValue(`fees.${feeType.id}.enabled` as any, enabled);
+                    // When enabling, set default placeholder values
                     if (enabled) {
                       if (feeType.hasMultipleRates) {
-                        if (currentFeeState?.inKindRate === undefined) setValue(`fees.${feeType.id}.inKindRate`, 1.0);
-                        if (currentFeeState?.specificAssetRate === undefined) setValue(`fees.${feeType.id}.specificAssetRate`, 5.0);
+                        if (!currentFeeState?.inKindRate) setValue(`fees.${feeType.id}.inKindRate` as any, "");
+                        if (!currentFeeState?.specificAssetRate) setValue(`fees.${feeType.id}.specificAssetRate` as any, "");
                       } else {
-                        if (currentFeeState?.rate === undefined) setValue(`fees.${feeType.id}.rate`, feeType.defaultRate);
+                        if (!currentFeeState?.rate) setValue(`fees.${feeType.id}.rate` as any, "");
                       }
                       // Set default allocation if applicable and not set
-                      if (feeType.hasAllocation && currentFeeState?.allocation === undefined) {
-                        setValue(`fees.${feeType.id}.allocation`, "vault");
+                      if (feeType.hasAllocation && !currentFeeState?.allocation) {
+                        setValue(`fees.${feeType.id}.allocation` as any, "vault");
                       }
                       // Set default recipient if applicable and not set
-                      if (feeType.hasRecipient && currentFeeState?.recipient === undefined) {
-                        setValue(`fees.${feeType.id}.recipient`, "");
+                      if (feeType.hasRecipient) {
+                        setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
+                      }
+                    }
+                    else {
+                      if (feeType.hasRecipient) {
+                        setValue(`fees.${feeType.id}.recipient` as any, "");
                       }
                     }
                   }}
@@ -183,16 +130,19 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                             <Input
                               id={`${feeType.id}-inKind`}
                               type="number"
-                              placeholder="1"
+                              placeholder="1.0"
                               step="0.01"
                               min="0"
                               max="100"
-                              value={currentFeeState?.inKindRate ?? 1.0}
-                              onChange={(e) => setValue(`fees.${feeType.id}.inKindRate`, parseFloat(e.target.value) || 0)}
-                              className="max-w-xs"
+                              value={currentFeeState?.inKindRate || ""}
+                              onChange={(e) => setValue(`fees.${feeType.id}.inKindRate` as any, e.target.value)}
+                              className={`max-w-xs ${currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.inKindRate ? 'border-red-500' : ''}`}
                             />
                             <span className="text-muted-foreground">%</span>
                           </div>
+                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.inKindRate && (
+                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.inKindRate?.message}</p>
+                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -201,16 +151,19 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                             <Input
                               id={`${feeType.id}-specific`}
                               type="number"
-                              placeholder="5"
+                              placeholder="5.0"
                               step="0.01"
                               min="0"
                               max="100"
-                              value={currentFeeState?.specificAssetRate ?? 5.0}
-                              onChange={(e) => setValue(`fees.${feeType.id}.specificAssetRate`, parseFloat(e.target.value) || 0)}
-                              className="max-w-xs"
+                              value={currentFeeState?.specificAssetRate || ""}
+                              onChange={(e) => setValue(`fees.${feeType.id}.specificAssetRate` as any, e.target.value)}
+                              className={`max-w-xs ${currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.specificAssetRate ? 'border-red-500' : ''}`}
                             />
                             <span className="text-muted-foreground">%</span>
                           </div>
+                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.specificAssetRate && (
+                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.specificAssetRate?.message}</p>
+                          )}
                         </div>
 
                         {feeType.hasAllocation && (
@@ -221,7 +174,21 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                                 options={FEE_ALLOCATION_OPTIONS}
                                 placeholder="Select allocation"
                                 value={currentFeeState?.allocation || "vault"}
-                                onChange={(value) => setValue(`fees.${feeType.id}.allocation`, value)}
+                                onChange={(value) => {
+                                  setValue(`fees.${feeType.id}.allocation` as any, value)
+
+                                  // Clear recipient when switching to vault, set owner when switching to manager
+                                  if (value === "vault") {
+                                    // Clear recipient when allocation is set to vault
+                                    setValue(`fees.${feeType.id}.recipient` as any, "");
+                                  } else if (value === "manager") {
+                                    // Set to owner address when switching to manager (if not already set)
+                                    if (!currentFeeState?.recipient) {
+                                      setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress || "");
+                                    }
+                                  }
+                                }
+                                }
                                 className="max-w-xs"
                               />
                             </div>
@@ -234,9 +201,27 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                                   type="text"
                                   placeholder="Enter address ..."
                                   value={currentFeeState?.recipient || ""}
-                                  onChange={(e) => setValue(`fees.${feeType.id}.recipient`, e.target.value)}
+                                  onChange={(e) => setValue(`fees.${feeType.id}.recipient` as any, e.target.value)}
+                                  onBlur={(e) => {
+                                    // If user clears the field and leaves it empty, reset to owner
+                                    if (!e.target.value.trim() && vaultOwnerAddress && currentFeeState?.enabled) {
+                                      setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
+                                    }
+                                  }}
                                   className="max-w-md"
                                 />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress || "")}
+                                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                  >
+                                    Use vault owner address
+                                  </button>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({vaultOwnerAddress ? `${vaultOwnerAddress.slice(0, 6)}...${vaultOwnerAddress.slice(-4)}` : 'not set'})
+                                  </span>
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   By default, the fee recipient is the vault owner
                                 </p>
@@ -253,27 +238,50 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                           <Input
                             id={`${feeType.id}-rate`}
                             type="number"
-                            placeholder="0.00"
+                            placeholder={feeType.id === "management" ? "2.0" : feeType.id === "performance" ? "20.0" : "0.5"}
                             step="0.01"
                             min="0"
                             max="100"
-                            value={currentFeeState?.rate ?? feeType.defaultRate}
-                            onChange={(e) => setValue(`fees.${feeType.id}.rate`, parseFloat(e.target.value) || 0)}
+                            value={currentFeeState?.rate || ""}
+                            onChange={(e) => setValue(`fees.${feeType.id}.rate` as any, e.target.value)}
+                            className={currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.rate ? 'border-red-500' : ''}
                           />
+                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.rate && (
+                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.rate?.message}</p>
+                          )}
                         </div>
 
                         {feeType.hasRecipient && (
                           <div className="space-y-2">
-                            <Label htmlFor={`${feeType.id}-recipient`}>Recipient Address (optional)</Label>
+                            <Label htmlFor={`${feeType.id}-recipient`}>Recipient Address</Label>
                             <Input
                               id={`${feeType.id}-recipient`}
                               type="text"
-                              placeholder="Enter address ..."
+                              placeholder="Enter recipient address..."
                               value={currentFeeState?.recipient || ""}
-                              onChange={(e) => setValue(`fees.${feeType.id}.recipient`, e.target.value)}
+                              onChange={(e) => setValue(`fees.${feeType.id}.recipient` as any, e.target.value)}
+                              className="max-w-md"
+                              onBlur={(e) => {
+                                // If user clears the field and leaves it empty, reset to owner
+                                if (!e.target.value.trim() && vaultOwnerAddress && currentFeeState?.enabled) {
+                                  setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
+                                }
+                              }}
                             />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress || "")}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                Use vault owner address
+                              </button>
+                              <span className="text-xs text-muted-foreground">
+                                ({vaultOwnerAddress ? `${vaultOwnerAddress.slice(0, 6)}...${vaultOwnerAddress.slice(-4)}` : 'not set'})
+                              </span>
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                              By default, the fee recipient is the vault owner
+                              The recipient address defaults to the vault owner when the fee is enabled
                             </p>
                           </div>
                         )}
@@ -288,7 +296,20 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                                 options={FEE_ALLOCATION_OPTIONS}
                                 placeholder="Select allocation"
                                 value={currentFeeState?.allocation || "vault"}
-                                onChange={(value) => setValue(`fees.${feeType.id}.allocation`, value)}
+                                onChange={(value) => {
+                                  setValue(`fees.${feeType.id}.allocation` as any, value)
+                                  // Clear recipient when switching to vault, set owner when switching to manager
+                                  if (value === "vault") {
+                                    // Clear recipient when allocation is set to vault
+                                    setValue(`fees.${feeType.id}.recipient` as any, "");
+                                  } else if (value === "manager") {
+                                    // Set to owner address when switching to manager (if not already set)
+                                    if (!currentFeeState?.recipient) {
+                                      setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress || "");
+                                    }
+                                  }
+                                }
+                                }
                               />
                             </div>
 
@@ -300,8 +321,26 @@ export function FeeConfigStep({ watchedValues, setValue }: FeeConfigStepProps) {
                                   type="text"
                                   placeholder="Enter address ..."
                                   value={currentFeeState?.recipient || ""}
-                                  onChange={(e) => setValue(`fees.${feeType.id}.recipient`, e.target.value)}
+                                  onChange={(e) => setValue(`fees.${feeType.id}.recipient` as any, e.target.value)}
+                                  onBlur={(e) => {
+                                    // If user clears the field and leaves it empty, reset to owner
+                                    if (!e.target.value.trim() && vaultOwnerAddress && currentFeeState?.enabled) {
+                                      setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
+                                    }
+                                  }}
                                 />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress || "")}
+                                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                  >
+                                    Use vault owner address
+                                  </button>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({vaultOwnerAddress ? `${vaultOwnerAddress.slice(0, 6)}...${vaultOwnerAddress.slice(-4)}` : 'not set'})
+                                  </span>
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   By default, the fee recipient is the vault owner
                                 </p>

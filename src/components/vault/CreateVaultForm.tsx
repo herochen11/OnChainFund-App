@@ -17,7 +17,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { type Address } from 'viem';
+import { type Address, type Hex } from 'viem';
+import { type CreateVaultFormData } from '@/types/vault';
+import { logVaultFees } from '@/lib/feeDebug';
+import { encodeFeeData } from '@/lib/feeConfigEncode';
+import { Fee } from "@enzymefinance/sdk/Configuration";
+
 
 // Import Enzyme SDK
 import { LifeCycle } from "@enzymefinance/sdk";
@@ -35,35 +40,88 @@ const createVaultSchema = z.object({
   fees: z.object({
     management: z.object({
       enabled: z.boolean(),
-      rate: z.number().min(0).max(100),
-      recipient: z.string().optional(),
+      rate: z.string().default("0"),
+      recipient: z.string().default("0x"),
+    }).refine((data) => {
+      if (data.enabled) {
+        const rate = parseFloat(data.rate);
+        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
+      }
+      return true;
+    }, {
+      message: "Management fee rate is required when fee is enabled",
+      path: ["rate"],
     }),
     performance: z.object({
       enabled: z.boolean(),
-      rate: z.number().min(0).max(100),
-      recipient: z.string().optional(),
+      rate: z.string().default("0"),
+      recipient: z.string().default("0x"),
+    }).refine((data) => {
+      if (data.enabled) {
+        const rate = parseFloat(data.rate);
+        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
+      }
+      return true;
+    }, {
+      message: "Performance fee rate is required when fee is enabled",
+      path: ["rate"],
     }),
     entrance: z.object({
       enabled: z.boolean(),
-      rate: z.number().min(0).max(100),
-      allocation: z.string().optional(),
-      recipient: z.string().optional(),
+      rate: z.string().default("0"),
+      allocation: z.string().default("vault"),
+      recipient: z.string().default("0x"),
+    }).refine((data) => {
+      if (data.enabled) {
+        const rate = parseFloat(data.rate);
+        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
+      }
+      return true;
+    }, {
+      message: "Entrance fee rate is required when fee is enabled",
+      path: ["rate"],
     }),
     exit: z.object({
       enabled: z.boolean(),
-      inKindRate: z.number().min(0).max(100),
-      specificAssetRate: z.number().min(0).max(100),
-      allocation: z.string().optional(),
-      recipient: z.string().optional(),
-    }),
+      inKindRate: z.string().default("0"),
+      specificAssetRate: z.string().default("0"),
+      allocation: z.string().default("vault"),
+      recipient: z.string().default("0x"),
+    })
+      .refine((data) => {
+        if (!data.enabled) return true;
+        const inKindRate = parseFloat(data.inKindRate);
+        return data.inKindRate.trim() !== "" && !isNaN(inKindRate) && inKindRate > 0;
+      }, {
+        message: "In-kind redemption rate is required when exit fee is enabled",
+        path: ["inKindRate"],
+      })
+      .refine((data) => {
+        if (!data.enabled) return true;
+        const specificAssetRate = parseFloat(data.specificAssetRate);
+        return data.specificAssetRate.trim() !== "" && !isNaN(specificAssetRate) && specificAssetRate > 0;
+      }, {
+        message: "Specific asset redemption rate is required when exit fee is enabled",
+        path: ["specificAssetRate"],
+      }),
   }),
   policies: z.array(z.object({
     type: z.string(),
     settings: z.string(),
   })),
-});
-
-type CreateVaultFormData = z.infer<typeof createVaultSchema>;
+  depositPolicies: z.object({
+    limitWalletsEnabled: z.boolean().optional(),
+    depositLimitsEnabled: z.boolean().optional(),
+    allowedWallets: z.array(z.string()).optional(),
+    minDeposit: z.string().optional(),
+    maxDeposit: z.string().optional(),
+    rejectAllDeposits: z.boolean().optional(),
+  }).optional(),
+  sharesPolicies: z.object({
+    restrictSharesTransfer: z.boolean().optional(),
+    allowedTransferWallets: z.array(z.string()).optional(),
+  }).optional(),
+}) satisfies z.ZodType<CreateVaultFormData>;
 
 const STEPS = [
   {
@@ -130,13 +188,25 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       vaultSymbol: "",
       denominationAsset: "",
       fees: {
-        management: { enabled: false, rate: 2.0, recipient: "" },
-        performance: { enabled: false, rate: 20.0, recipient: "" },
-        entrance: { enabled: false, rate: 0.5, allocation: "vault", recipient: "" },
-        exit: { enabled: false, inKindRate: 1.0, specificAssetRate: 5.0, allocation: "vault", recipient: "" },
+        management: { enabled: false, rate: "", recipient: "" },
+        performance: { enabled: false, rate: "", recipient: "" },
+        entrance: { enabled: false, rate: "", allocation: "vault", recipient: "" },
+        exit: { enabled: false, inKindRate: "", specificAssetRate: "", allocation: "vault", recipient: "" },
       },
       policies: [],
-    },
+      depositPolicies: {
+        limitWalletsEnabled: false,
+        depositLimitsEnabled: false,
+        allowedWallets: [],
+        minDeposit: "",
+        maxDeposit: "",
+        rejectAllDeposits: false,
+      },
+      sharesPolicies: {
+        restrictSharesTransfer: false,
+        allowedTransferWallets: [],
+      },
+    } satisfies CreateVaultFormData,
   });
 
   const watchedValues = watch();
@@ -190,6 +260,31 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       console.log("Environment:", CUSTOM_SEPOLIA_ENVIRONMENT);
       console.log("Fund Deployer:", CUSTOM_SEPOLIA_ENVIRONMENT.contracts?.fundDeployer);
 
+      logVaultFees(data);
+      
+      // Fee validation and encoding - this is where validation errors are caught
+      console.log("🔍 Starting fee validation and encoding...");
+      const encodedFees = encodeFeeData(data.fees, currentDeployment);
+      console.log("✅ Fee validation passed, proceeding with vault creation...");
+      
+      // Store original fee rates for future reference (optional)
+      const originalFeeRates = {
+        management: data.fees.management.enabled ? data.fees.management.rate : null,
+        performance: data.fees.performance.enabled ? data.fees.performance.rate : null,
+        entrance: data.fees.entrance.enabled ? data.fees.entrance.rate : null,
+        exit: data.fees.exit.enabled ? {
+          inKind: data.fees.exit.inKindRate,
+          specificAsset: data.fees.exit.specificAssetRate
+        } : null,
+      };
+      console.log("💾 Original fee rates:", originalFeeRates);
+      const feeManagerConfigData = encodedFees.length === 0
+        ? "0x" as Hex
+        : Fee.encodeSettings(encodedFees);
+
+      // logVaultPolicy(data);
+      // const policyManagerConfigData = data.policies.map(policy => ({
+
       // Validate required fields
       if (!data.vaultName || !data.vaultSymbol || !data.denominationAsset) {
         throw new Error('Missing required fields: vaultName, vaultSymbol, or denominationAsset');
@@ -203,7 +298,7 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
         symbol: data.vaultSymbol,
         denominationAsset: data.denominationAsset as Address,
         sharesActionTimelockInSeconds: 0n,
-        feeManagerConfigData: '0x' as const,
+        feeManagerConfigData: feeManagerConfigData,
         policyManagerConfigData: '0x' as const,
       };
 
@@ -218,7 +313,7 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
         console.log(`✅ ${key}:`, value);
       });
 
-      console.log("Creating vault transaction with SDK...");
+      console.log("Creating vault transaction ...");
 
       // Create vault transaction using Enzyme SDK
       const vaultTransaction = LifeCycle.createVault(vaultParams);
@@ -277,17 +372,17 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       // Show success message
       alert(`✅ Vault Created Successfully using Enzyme SDK!
 
-Vault Name: ${data.vaultName}
-Symbol: ${data.vaultSymbol}
-Owner: ${address}
-Network: ${currentDeployment}
+      Vault Name: ${data.vaultName}
+      Symbol: ${data.vaultSymbol}
+      Owner: ${address}
+      Network: ${currentDeployment}
 
-🔗 Transaction: ${hash}
+      🔗 Transaction: ${hash}
 
-Check Sepolia Etherscan:
-https://sepolia.etherscan.io/tx/${hash}
+      Check Sepolia Etherscan:
+      https://sepolia.etherscan.io/tx/${hash}
 
-${result.message}`);
+      ${result.message}`);
 
     } catch (error) {
       console.error('=== VAULT CREATION ERROR ===');
@@ -295,14 +390,13 @@ ${result.message}`);
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
       console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
+      // Handle other types of errors
       let errorMessage = 'Unknown error occurred';
       if (error instanceof Error) {
         errorMessage = error.message;
       }
 
-      alert(`❌ Vault creation failed: ${errorMessage}
-
-Check the browser console for detailed error information.`);
+      alert(`❌ Vault creation failed: ${errorMessage}\n\nCheck the browser console for detailed error information.`);
     }
   };
 
@@ -314,6 +408,9 @@ Check the browser console for detailed error information.`);
         fieldsToValidate = ['vaultName', 'vaultSymbol', 'denominationAsset'];
         break;
       case 1:
+        // Validate fees step
+        fieldsToValidate = ['fees'];
+        break;
       case 2:
       case 3:
       case 4:
@@ -371,6 +468,8 @@ Check the browser console for detailed error information.`);
           <FeeConfigStep
             watchedValues={watchedValues}
             setValue={setValue}
+            vaultOwnerAddress={address}
+            errors={errors}
           />
         );
       case 2:

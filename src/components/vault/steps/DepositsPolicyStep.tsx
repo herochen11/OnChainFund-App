@@ -90,7 +90,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
             // Bind checked state to the value from react-hook-form
             checked={limitWalletsEnabled}
             // Update the form state using setValue when the switch changes
-            onCheckedChange={(checked) => setValue("limitWalletsEnabled", checked)}
+            onCheckedChange={(checked) => setValue("depositPolicies.limitWalletsEnabled", checked)}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -111,7 +111,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                   // Bind addresses to the value from react-hook-form
                   addresses={allowedWallets}
                   // Update the form state using setValue when addresses change
-                  setAddresses={(newAddresses) => setValue("allowedWallets", newAddresses)}
+                  setAddresses={(newAddresses) => setValue("depositPolicies.allowedWallets", newAddresses)}
                   placeholder="Enter address ..."
                   showOwnerButton={true}
                 />
@@ -123,7 +123,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                   {/* For example: */}
                   <Switch
                     checked={rejectAllDeposits}
-                    onCheckedChange={(checked) => setValue("rejectAllDeposits", checked)}
+                    onCheckedChange={(checked) => setValue("depositPolicies.rejectAllDeposits", checked)}
                   />
                 </div>
               </div>
@@ -142,7 +142,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
             // Bind checked state to the value from react-hook-form
             checked={depositLimitsEnabled}
             // Update the form state using setValue when the switch changes
-            onCheckedChange={(checked) => setValue("depositLimitsEnabled", checked)}
+            onCheckedChange={(checked) => setValue("depositPolicies.depositLimitsEnabled", checked)}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -174,7 +174,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                         // Bind value to the form state
                         value={minDeposit}
                         // Update form state using setValue on change
-                        onChange={(e) => setValue("minDeposit", e.target.value)}
+                        onChange={(e) => setValue("depositPolicies.minDeposit", e.target.value)}
                         className="flex-1"
                       />
                       <span className="text-sm text-muted-foreground">DAI</span>
@@ -190,7 +190,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                         // Bind value to the form state
                         value={maxDeposit}
                         // Update form state using setValue on change
-                        onChange={(e) => setValue("maxDeposit", e.target.value)}
+                        onChange={(e) => setValue("depositPolicies.maxDeposit", e.target.value)}
                         className="flex-1"
                       />
                       <span className="text-sm text-muted-foreground">DAI</span>
@@ -216,7 +216,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                   <div className="flex items-center space-x-2 mt-4">
                     <Switch
                       checked={rejectAllDeposits}
-                      onCheckedChange={(checked) => setValue("rejectAllDeposits", checked)}
+                      onCheckedChange={(checked) => setValue("depositPolicies.rejectAllDeposits", checked)}
                       id="reject-all-deposits"
                     />
                     <Label htmlFor="reject-all-deposits">Reject all deposits</Label>

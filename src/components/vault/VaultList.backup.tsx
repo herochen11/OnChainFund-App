@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
-import { useState, useEffect } from "react"; // 添加 useEffect
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -311,12 +311,6 @@ export function VaultList() {
   const deployment = deploymentState.deployment;
   const [showMyVaults, setShowMyVaults] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const [mounted, setMounted] = useState(false); // 添加 mounted 狀態
-
-  // 修復 hydration: 確保組件在客戶端完全加載後再渲染
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const myVaults = useVaultListByAccount(account.address);
   const allVaultsQuery = useAllVaults();
@@ -336,19 +330,8 @@ export function VaultList() {
   };
 
   const handleVaultClick = (vault: any) => {
-    router.push(`/vault/${vault.deployment}/${vault.vaultProxy}`);
+    router.push(`/${vault.deployment}/${vault.vaultProxy}`);
   };
-
-  // 在 hydration 完成前顯示 loading
-  if (!mounted) {
-    return (
-      <Card className="w-full mb-12 shadow-lg">
-        <CardContent className="p-6">
-          <LoadingGrid />
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="w-full mb-12 shadow-lg">
@@ -515,7 +498,7 @@ export function VaultList() {
       </CardContent>
 
       {/* Debug information - only show in development */}
-      {process.env.NODE_ENV === 'development' && mounted && (
+      {process.env.NODE_ENV === 'development' && (
         <CardContent className="pt-0">
           <details className="text-xs">
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">

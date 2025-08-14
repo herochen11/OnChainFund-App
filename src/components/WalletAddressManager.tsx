@@ -5,15 +5,16 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { useAccount } from "wagmi";
-import { 
-  createWalletListManager, 
-  formatAddress, 
-  type WalletListManager 
+import {
+  createWalletListManager,
+  formatAddress,
+  type WalletListManager
 } from "@/lib/wallet-utils";
+import { type Address } from "viem";
 
 interface WalletAddressManagerProps {
-  addresses: string[];
-  setAddresses: (addresses: string[]) => void;
+  addresses: Address[];
+  setAddresses: (addresses: Address[]) => void;
   placeholder?: string;
   showOwnerButton?: boolean;
   className?: string;
@@ -35,7 +36,7 @@ export function WalletAddressManager({
 
   const handleAddAddress = () => {
     const result = walletManager.addAddress(inputAddress);
-    
+
     if (result.success) {
       setInputAddress("");
       setValidationError("");
@@ -51,7 +52,7 @@ export function WalletAddressManager({
     }
 
     const result = walletManager.addOwnerWallet(connectedAddress);
-    
+
     if (!result.success) {
       setValidationError(result.error || "Failed to add owner wallet");
     } else {
@@ -85,8 +86,8 @@ export function WalletAddressManager({
           onKeyPress={handleInputKeyPress}
           className={`flex-1 ${validationError ? 'border-red-500' : ''}`}
         />
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           onClick={handleAddAddress}
           disabled={!inputAddress.trim()}
@@ -95,8 +96,8 @@ export function WalletAddressManager({
           Add
         </Button>
         {showOwnerButton && (
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={handleAddOwnerWallet}
             disabled={!isConnected}

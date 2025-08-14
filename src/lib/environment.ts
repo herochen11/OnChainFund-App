@@ -13,9 +13,7 @@ const platformName = process.env.NEXT_PUBLIC_PLATFORM_NAME || 'OnChain Fund';
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
 const infuraApiKey = process.env.INFURA_API_KEY || '';
 
-
-const platformConfig =
-{
+const platformConfig = {
     platformName,
     mode,
     walletConnectProjectId,

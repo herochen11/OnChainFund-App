@@ -1,69 +1,85 @@
-"use client";
+// 註解掉整個組件的複雜功能
+// "use client";
 
-import { Title } from "./Title";
-import { Button } from "./ui/button";
-import { type Deployment, getNetworkByDeployment } from "@/lib/consts";
-import { useAllowance } from "@/lib/hooks/useAllowance";
-import { z } from "@/lib/zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
-import { useForm } from "react-hook-form";
-import { type Address, parseAbi, zeroAddress } from "viem";
-import { useAccount, useContractWrite } from "wagmi";
-import { z as zz } from "zod";
+// import { Title } from "@/components/Title";
+// import { Button } from "@/components/ui/button";
+// import { type Deployment, getNetworkByDeployment } from "@/lib/consts";
+// import { useAllowance } from "@/lib/hooks/useAllowance";
+// import { z } from "@/lib/zod";
+// import { zodResolver } from "@hookform/resolvers/zod";
+// import { useMemo } from "react";
+// import { useForm } from "react-hook-form";
+// import { type Address, parseAbi, zeroAddress } from "viem";
+// import { useAccount, useContractWrite } from "wagmi";
+// import { z as zz } from "zod";
 
-interface VaultApproveProps {
-  deployment: Deployment;
-  comptroller: Address;
-  denominationAsset: Address;
-}
+// interface VaultApproveProps {
+//   deployment: Deployment;
+//   comptroller: Address;
+//   denominationAsset: Address;
+// }
 
-export function VaultApprove({ deployment, comptroller, denominationAsset }: VaultApproveProps) {
-  const { address, isConnecting, isDisconnected } = useAccount();
+// export function VaultApprove({ deployment, comptroller, denominationAsset }: VaultApproveProps) {
+//   const { address, isConnecting, isDisconnected } = useAccount();
 
-  const schema = z.object({
-    amount: z.bigint(),
-  });
+//   const schema = z.object({
+//     amount: z.bigint(),
+//   });
 
-  const { register, handleSubmit } = useForm({
-    defaultValues: {
-      amount: 1000000000000000000n,
-    },
-    resolver: zodResolver(schema),
-  });
+//   const { register, handleSubmit } = useForm({
+//     defaultValues: {
+//       amount: 1000000000000000000n,
+//     },
+//     resolver: zodResolver(schema),
+//   });
 
-  const { data, isLoading, isSuccess, write } = useContractWrite({
-    address: denominationAsset,
-    abi: parseAbi(["function approve(address, uint256) external returns (bool)"]),
-    functionName: "approve",
-  });
+//   const { data, isLoading, isSuccess, write } = useContractWrite({
+//     address: denominationAsset,
+//     abi: parseAbi(["function approve(address, uint256) external returns (bool)"]),
+//     functionName: "approve",
+//   });
 
-  const allowance = useAllowance({
-    network: getNetworkByDeployment(deployment),
-    token: denominationAsset,
-    owner: address ?? zeroAddress,
-    spender: comptroller,
-  });
+//   const allowance = useAllowance({
+//     network: getNetworkByDeployment(deployment),
+//     token: denominationAsset,
+//     owner: address ?? zeroAddress,
+//     spender: comptroller,
+//   });
 
-  const approvedAmount = useMemo(() => allowance.data ?? 0n, [allowance.data]);
+//   const approvedAmount = useMemo(() => allowance.data ?? 0n, [allowance.data]);
 
-  const onSubmit = (data: zz.infer<typeof schema>) => {
-    if (data.amount <= approvedAmount) {
-      console.log("Approving less (or equal_ than already approved. Why would you do that?");
-      return;
-    }
+//   const onSubmit = (data: zz.infer<typeof schema>) => {
+//     if (data.amount <= approvedAmount) {
+//       console.log("Approving less (or equal) than already approved. Why would you do that?");
+//       return;
+//     }
 
-    write({ args: [comptroller, data.amount] });
-  };
+//     write({ args: [comptroller, data.amount] });
+//   };
 
+//   return (
+//     <form name="approve" onSubmit={handleSubmit(onSubmit)} className="flex-col space-y-4 my-8">
+//       <Title appearance="primary">Step 1: Approve</Title>
+//       <div className="text-sm text-muted-foreground">
+//         Currently approved amount: {approvedAmount.toString()}
+//       </div>
+//       <input 
+//         {...register("amount")} 
+//         className="h-10 rounded p-2 border border-gray-300 w-full" 
+//         placeholder="Enter amount to approve"
+//       />
+//       <Button type="submit" disabled={isLoading}>
+//         {isLoading ? "Approving..." : "Approve"}
+//       </Button>
+//     </form>
+//   );
+// }
+
+// 簡化版本 - 空殼組件
+export function VaultApprove() {
   return (
-    <form name="approve" onSubmit={handleSubmit(onSubmit)} className="flex-col space-y-4 my-8">
-      <Title appearance="primary">Step 1: Approve </Title>
-      Currently approved amount: {approvedAmount.toString()}
-      <br />
-      <input {...register("amount")} className="h-10 rounded p-2" />
-      <br />
-      <Button type="submit">Submit</Button>
-    </form>
+    <div className="text-center py-4">
+      <p className="text-muted-foreground">Approve functionality disabled</p>
+    </div>
   );
 }

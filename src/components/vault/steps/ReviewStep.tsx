@@ -6,9 +6,11 @@ import { SelectOption } from "@/components/ui/select";
 import { getAssetOptions, getAssetDisplayName } from "@/lib/assets";
 import { type Deployment } from "@/lib/consts";
 import { useMemo } from "react";
+import type { CreateVaultFormData, VaultPolicy } from '@/types/vault';
+import { FEE_TYPES } from '@/types/vault';
 
-// Fee types for display
-const FEE_TYPES = [
+// Use FEE_TYPES from shared types
+const FEE_TYPE_LABELS = [
   { id: "management", label: "Management Fee" },
   { id: "performance", label: "Performance Fee" },
   { id: "entrance", label: "Entrance Fee" },
@@ -24,8 +26,8 @@ const POLICY_TYPES: SelectOption[] = [
 ];
 
 interface ReviewStepProps {
-  watchedValues: any;
-  policies: { type: string; settings: string }[];
+  watchedValues: CreateVaultFormData;
+  policies: VaultPolicy[];
   deployment?: Deployment;
 }
 
@@ -75,13 +77,13 @@ export function ReviewStep({ watchedValues, policies, deployment = "ethereum" }:
             <CardTitle className="text-lg">Fees</CardTitle>
           </CardHeader>
           <CardContent>
-            {Object.entries(watchedValues.fees || {}).filter(([_, fee]) => fee?.enabled).length === 0 ? (
+            {Object.entries(watchedValues.fees).filter(([_, fee]) => fee?.enabled).length === 0 ? (
               <p className="text-muted-foreground">No fees enabled</p>
             ) : (
               <div className="space-y-2">
-                {Object.entries(watchedValues.fees || {}).map(([feeId, fee]) => {
+                {Object.entries(watchedValues.fees).map(([feeId, fee]) => {
                   if (!fee?.enabled) return null;
-                  const feeType = FEE_TYPES.find(f => f.id === feeId);
+                  const feeType = FEE_TYPE_LABELS.find(f => f.id === feeId);
                   
                   if (feeId === 'exit') {
                     return (
