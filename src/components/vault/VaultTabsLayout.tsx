@@ -8,12 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DepositModal } from "./DepositModal";
 import { RedeemModal } from "./RedeemModal";
 import { OverviewTab, PortfolioTab, ConfigurationTab, FeeTab, PolicyTab } from "./tabs";
+import { UniswapTab } from "./tabs/UniswapTab";
 import { VaultErrorBoundary } from "./VaultErrorBoundary";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowUpCircle, ArrowDownCircle, TrendingUp, Info, Home } from "lucide-react";
+import { ArrowUpCircle, ArrowDownCircle, TrendingUp, Info, Home, Repeat } from "lucide-react";
 import { type Address } from "viem";
 import { useAccount } from "wagmi";
 import { useVaultSharesBalance } from "@/lib/hooks/useVaultSharesBalance";
@@ -135,12 +136,16 @@ export function VaultTabsLayout({
       {/* Tabs Navigation with Home Button */}
       <div className="flex items-center justify-between mb-4">
         <Tabs defaultValue="overview" className="flex-1">
-          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+          <TabsList className="grid grid-cols-6 w-full max-w-3xl">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               Overview
             </TabsTrigger>
             <TabsTrigger value="portfolio" className="flex items-center gap-2">
               Portfolio
+            </TabsTrigger>
+            <TabsTrigger value="uniswap" className="flex items-center gap-2">
+              <Repeat className="h-4 w-4" />
+              Swap
             </TabsTrigger>
             <TabsTrigger value="fee" className="flex items-center gap-2">
               Fee
@@ -172,6 +177,14 @@ export function VaultTabsLayout({
             </TabsContent>
             <TabsContent value="portfolio" className="mt-0">
               <PortfolioTab vault={vault as Address} deployment={deployment as any} />
+            </TabsContent>
+            <TabsContent value="uniswap" className="mt-0">
+              <UniswapTab 
+                vault={vault as Address} 
+                deployment={deployment as any}
+                comptrollerProxy={comptrollerProxy}
+                denominationAsset={denominationAssetAddress}
+              />
             </TabsContent>
             <TabsContent value="fee" className="mt-0">
               <FeeTab 

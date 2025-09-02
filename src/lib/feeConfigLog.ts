@@ -5,7 +5,7 @@ import { FEE_TYPES } from '@/types/vault';
  * Logs the detailed configuration for all vault fees.
  * @param data The CreateVaultFormData object containing fee details.
  */
-export function logVaultFees(data: CreateVaultFormData): void {
+export function logFeesConfig(data: CreateVaultFormData): void {
     console.log("--- Vault Fee Configuration Debug ---");
 
     if (!data || !data.fees) {

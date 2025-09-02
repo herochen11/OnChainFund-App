@@ -8,27 +8,32 @@ const SUPPORTED_ASSETS = [
   {
     key: "Usdc" as const,
     label: "USDC - USD Coin",
-    symbol: "USDC"
+    symbol: "USDC",
+    decimals: 6
   },
   {
     key: "WETH" as const,
     label: "WETH - Wrapped Ether",
-    symbol: "WETH"
+    symbol: "WETH",
+    decimals: 18
   },
   {
     key: "WBTC" as const,
     label: "WBTC - Wrapped Bitcoin",
-    symbol: "WBTC"
+    symbol: "WBTC",
+    decimals: 8
   },
   {
     key: "DAI" as const,
     label: "DAI - Dai Stablecoin",
-    symbol: "DAI"
+    symbol: "DAI",
+    decimals: 18
   },
   {
     key: "ASVT" as const,
     label: "ASVT - Asset Vault Token for Sepolia Testnet (RON)",
-    symbol: "ASVT"
+    symbol: "ASVT",
+    decimals: 18
   }
 ] as const;
 
@@ -101,6 +106,26 @@ export function getAssetSymbol(address: string, deployment: Deployment): string 
     }
   }
   return "UNKNOWN";
+}
+
+/**
+ * Get asset decimals by address
+ */
+export function getAssetDecimals(address: string, deployment: Deployment): number {
+  // Find the asset by comparing addresses
+  for (const asset of SUPPORTED_ASSETS) {
+    try {
+      const assetAddress = getContract(deployment, asset.key);
+      if (assetAddress.toLowerCase() === address.toLowerCase()) {
+        return asset.decimals;
+      }
+    } catch (error) {
+      // Asset not available in this deployment
+      continue;
+    }
+  }
+  // Default to 18 decimals (most common for ERC20 tokens)
+  return 18;
 }
 
 /**

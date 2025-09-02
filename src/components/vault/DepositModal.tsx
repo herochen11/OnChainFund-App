@@ -11,10 +11,10 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Info, ChevronDown, ChevronUp, Loader2, CheckCircle } from "lucide-react";
+import { Info, ChevronDown, ChevronUp, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { type Address, parseUnits, formatUnits, parseAbi } from "viem";
-import { useAccount, useWalletClient } from "wagmi";
-import { writeContract } from "viem/actions";
+import { useAccount, useWalletClient, usePublicClient } from "wagmi";
+import { writeContract, waitForTransactionReceipt } from "viem/actions";
 // import { Asset, Depositor } from "@enzymefinance/sdk"; // 不再需要，使用現代 viem 方式
 import { useSharesActionTimelock } from "@/lib/hooks/useSharesActionTimelock";
 import { useExpectedSharesForDeposit } from "@/lib/hooks/useExpectedSharesForDeposit";
@@ -31,7 +31,7 @@ interface DepositModalProps {
   deployment?: string;
 }
 
-type DepositStep = 'input' | 'approve' | 'deposit' | 'success';
+type DepositStep = 'input' | 'approve' | 'deposit' | 'success' | 'failed';
 
 export function DepositModal({
   isOpen,
@@ -56,6 +56,7 @@ export function DepositModal({
   // Wallet hooks
   const { address: userAddress } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
 
   // Network setup
   const network = getNetworkByDeployment(deployment as Deployment);
@@ -153,6 +154,10 @@ export function DepositModal({
       setError("Wallet not connected");
       return;
     }
+    if (!publicClient) {
+      setError("Public client not available");
+      return;
+    }
     if (!denominationAssetAddress) {
       setError("Denomination asset address not found");
       return;
@@ -187,15 +192,7 @@ export function DepositModal({
         from: userAddress
       });
 
-      // 移除舊的 SDK 調用
-      // const approveTransaction = Asset.approve({
-      //   asset: denominationAssetAddress,
-      //   amount: amountBigInt,
-      //   spender: comptrollerProxy
-      // });
-      // console.log("[DepositModal] Approve transaction object:", approveTransaction);
-
-      // 現代的 viem 方式 - 直接用 writeContract
+      // Send approval transaction
       const hash = await writeContract(walletClient, {
         address: denominationAssetAddress,
         abi: parseAbi(['function approve(address spender, uint256 amount) returns (bool)']),
@@ -203,18 +200,49 @@ export function DepositModal({
         args: [comptrollerProxy, amountBigInt],
       });
 
-      console.log("[DepositModal] Modern approve transaction sent:", hash);
+      console.log("[DepositModal] Approval transaction sent:", hash);
       setTxHash(hash);
 
-      console.log("[DepositModal] Approval transaction sent:", hash);
+      // Wait for approval confirmation
+      console.log("[DepositModal] Waiting for approval confirmation...");
+      const receipt = await waitForTransactionReceipt(publicClient, {
+        hash,
+        confirmations: 1,
+      });
 
-      // Move to deposit step
-      setCurrentStep('deposit');
+      console.log("[DepositModal] Approval receipt:", receipt);
+
+      // Check approval status
+      if (receipt.status === 'success') {
+        console.log("[DepositModal] ✅ Approval successful!");
+        // Move to deposit step
+        setCurrentStep('deposit');
+      } else {
+        console.error("[DepositModal] ❌ Approval failed - receipt status:", receipt.status);
+        setError("Approval failed. Please try again.");
+        setCurrentStep('failed');
+      }
 
     } catch (err: any) {
       console.error("[DepositModal] Approval error:", err);
-      setError(err.message || "Approval failed");
-      setCurrentStep('input');
+      
+      // Handle different types of errors
+      let errorMessage = "Approval failed";
+      
+      if (err.message) {
+        if (err.message.includes('User rejected')) {
+          errorMessage = "Approval was rejected by user";
+        } else if (err.message.includes('insufficient funds')) {
+          errorMessage = "Insufficient funds for approval";
+        } else if (err.message.includes('execution reverted')) {
+          errorMessage = "Approval failed - contract execution reverted";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
+      setCurrentStep('failed');
     } finally {
       setIsLoading(false);
     }
@@ -224,6 +252,10 @@ export function DepositModal({
     // 增強驗證
     if (!walletClient) {
       setError("Wallet not connected");
+      return;
+    }
+    if (!publicClient) {
+      setError("Public client not available");
       return;
     }
     if (!comptrollerProxy) {
@@ -259,15 +291,7 @@ export function DepositModal({
         minSharesQuantity: "1"
       });
 
-      // 移除舊的 SDK 調用
-      // const depositTransaction = Depositor.deposit({
-      //   comptrollerProxy,
-      //   amount: amountBigInt,
-      //   depositor: userAddress,
-      //   minSharesQuantity: 1n
-      // });
-      // console.log("[DepositModal] Deposit transaction object:", depositTransaction);
-
+      // Send the transaction
       const hash = await writeContract(walletClient, {
         address: comptrollerProxy,
         abi: parseAbi(['function buyShares(uint256 investmentAmount, uint256 minSharesQuantity) returns (uint256)']),
@@ -275,22 +299,53 @@ export function DepositModal({
         args: [amountBigInt, 1n],
       });
 
-      console.log("[DepositModal] Modern deposit transaction sent:", hash);
+      console.log("[DepositModal] Deposit transaction sent:", hash);
       setTxHash(hash);
 
-      console.log("[DepositModal] Deposit transaction sent:", hash);
+      // Wait for transaction confirmation
+      console.log("[DepositModal] Waiting for transaction confirmation...");
+      const receipt = await waitForTransactionReceipt(publicClient, {
+        hash,
+        confirmations: 1,
+      });
 
-      setCurrentStep('success');
+      console.log("[DepositModal] Transaction receipt:", receipt);
 
-      // Auto-close after 3 seconds
-      setTimeout(() => {
-        onClose();
-      }, 3000);
+      // Check transaction status
+      if (receipt.status === 'success') {
+        console.log("[DepositModal] ✅ Deposit successful!");
+        setCurrentStep('success');
+        
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          onClose();
+        }, 3000);
+      } else {
+        console.error("[DepositModal] ❌ Transaction failed - receipt status:", receipt.status);
+        setError("Transaction failed. Please check the transaction on block explorer.");
+        setCurrentStep('failed');
+      }
 
     } catch (err: any) {
       console.error("[DepositModal] Deposit error:", err);
-      setError(err.message || "Deposit failed");
-      setCurrentStep('input');
+      
+      // Handle different types of errors
+      let errorMessage = "Deposit failed";
+      
+      if (err.message) {
+        if (err.message.includes('User rejected')) {
+          errorMessage = "Transaction was rejected by user";
+        } else if (err.message.includes('insufficient funds')) {
+          errorMessage = "Insufficient funds for transaction";
+        } else if (err.message.includes('execution reverted')) {
+          errorMessage = "Transaction failed - contract execution reverted";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
+      setCurrentStep('failed');
     } finally {
       setIsLoading(false);
     }
@@ -301,6 +356,11 @@ export function DepositModal({
       await handleApprove();
     } else if (currentStep === 'deposit') {
       await handleDeposit();
+    } else if (currentStep === 'failed') {
+      // Reset to input step for retry
+      setCurrentStep('input');
+      setError("");
+      setTxHash("");
     }
   };
 
@@ -311,14 +371,15 @@ export function DepositModal({
     if (!hasTokenDecimals) return "Unable to Load Token Info";
     if (!isValidAmount()) return "Enter Amount";
     if (currentStep === 'approve' && isLoading) return "Approving...";
-    if (currentStep === 'deposit' && isLoading) return "Depositing...";
+    if (currentStep === 'deposit' && isLoading) return "Confirming Deposit...";
     if (currentStep === 'success') return "Success!";
+    if (currentStep === 'failed') return "Try Again";
     if (currentStep === 'deposit') return `Deposit ${amount} ${denominationAsset}`;
     return `Approve ${amount} ${denominationAsset}`;
   };
 
   const isButtonDisabled = () => {
-    if (!canProceed) return true;
+    if (!canProceed && currentStep !== 'failed') return true;
     if (isLoading) return true;
     if (currentStep === 'success') return true;
     return false;
@@ -372,8 +433,26 @@ export function DepositModal({
             </div>
           )}
 
+          {/* Failed State */}
+          {currentStep === 'failed' && (
+            <div className="text-center space-y-4">
+              <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
+              <div>
+                <h3 className="text-lg font-semibold text-red-700">Deposit Failed</h3>
+                <p className="text-sm text-gray-600">
+                  {error || "The deposit transaction failed. Please try again."}
+                </p>
+                {txHash && (
+                  <p className="text-xs text-gray-500 mt-2 break-all font-mono">
+                    Tx: {txHash}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Input Form */}
-          {currentStep !== 'success' && (
+          {currentStep !== 'success' && currentStep !== 'failed' && (
             <>
               <p className="text-gray-600 text-sm">
                 Choose amount to deposit:
@@ -533,7 +612,13 @@ export function DepositModal({
           <div className="pt-4">
             <Button
               onClick={currentStep === 'success' ? onClose : handleSubmit}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-lg transition-colors"
+              className={`w-full py-3 rounded-lg transition-colors ${
+                currentStep === 'failed' 
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : currentStep === 'success'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              } disabled:bg-gray-300 disabled:cursor-not-allowed`}
               disabled={isButtonDisabled()}
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}

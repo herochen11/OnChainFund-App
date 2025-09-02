@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UseFormSetValue, FieldErrors } from "react-hook-form";
+import type { UseFormSetValue, FieldErrors } from "react-hook-form";
 import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CreateVaultFormData, FeeTypeId } from '@/types/vault';
@@ -14,7 +14,7 @@ import { type Address } from "viem";
 interface FeeConfigStepProps {
   watchedValues: CreateVaultFormData;
   setValue: UseFormSetValue<CreateVaultFormData>;
-  vaultOwnerAddress?: Address;
+  vaultOwnerAddress: Address;
   errors?: FieldErrors<CreateVaultFormData>;
 }
 
@@ -89,26 +89,35 @@ export function FeeConfigStep({ watchedValues, setValue, vaultOwnerAddress, erro
                   checked={isEnabled}
                   onCheckedChange={(enabled) => {
                     setValue(`fees.${feeType.id}.enabled` as any, enabled);
-                    // When enabling, set default placeholder values
                     if (enabled) {
+                      // When enabling, set empty values to ensure proper validation
                       if (feeType.hasMultipleRates) {
-                        if (!currentFeeState?.inKindRate) setValue(`fees.${feeType.id}.inKindRate` as any, "");
-                        if (!currentFeeState?.specificAssetRate) setValue(`fees.${feeType.id}.specificAssetRate` as any, "");
+                        setValue(`fees.${feeType.id}.inKindRate` as any, "");
+                        setValue(`fees.${feeType.id}.specificAssetRate` as any, "");
                       } else {
-                        if (!currentFeeState?.rate) setValue(`fees.${feeType.id}.rate` as any, "");
+                        setValue(`fees.${feeType.id}.rate` as any, "");
                       }
-                      // Set default allocation if applicable and not set
-                      if (feeType.hasAllocation && !currentFeeState?.allocation) {
+                      // Set default allocation if applicable
+                      if (feeType.hasAllocation) {
                         setValue(`fees.${feeType.id}.allocation` as any, "vault");
                       }
-                      // Set default recipient if applicable and not set
+                      // Set default recipient if applicable
                       if (feeType.hasRecipient) {
                         setValue(`fees.${feeType.id}.recipient` as any, vaultOwnerAddress);
                       }
-                    }
-                    else {
+                    } else {
+                      // When disabling, clear all values
+                      if (feeType.hasMultipleRates) {
+                        setValue(`fees.${feeType.id}.inKindRate` as any, "");
+                        setValue(`fees.${feeType.id}.specificAssetRate` as any, "");
+                      } else {
+                        setValue(`fees.${feeType.id}.rate` as any, "");
+                      }
                       if (feeType.hasRecipient) {
                         setValue(`fees.${feeType.id}.recipient` as any, "");
+                      }
+                      if (feeType.hasAllocation) {
+                        setValue(`fees.${feeType.id}.allocation` as any, "vault");
                       }
                     }
                   }}
@@ -136,12 +145,12 @@ export function FeeConfigStep({ watchedValues, setValue, vaultOwnerAddress, erro
                               max="100"
                               value={currentFeeState?.inKindRate || ""}
                               onChange={(e) => setValue(`fees.${feeType.id}.inKindRate` as any, e.target.value)}
-                              className={`max-w-xs ${currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.inKindRate ? 'border-red-500' : ''}`}
+                              className={`max-w-xs ${errors?.fees?.[feeType.id]?.inKindRate ? 'border-red-500' : ''}`}
                             />
                             <span className="text-muted-foreground">%</span>
                           </div>
-                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.inKindRate && (
-                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.inKindRate?.message}</p>
+                          {errors?.fees?.exit?.inKindRate && (
+                            <p className="text-red-500 text-xs">{errors.fees.exit.inKindRate.message}</p>
                           )}
                         </div>
 
@@ -157,12 +166,12 @@ export function FeeConfigStep({ watchedValues, setValue, vaultOwnerAddress, erro
                               max="100"
                               value={currentFeeState?.specificAssetRate || ""}
                               onChange={(e) => setValue(`fees.${feeType.id}.specificAssetRate` as any, e.target.value)}
-                              className={`max-w-xs ${currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.specificAssetRate ? 'border-red-500' : ''}`}
+                              className={`max-w-xs ${errors?.fees?.[feeType.id]?.specificAssetRate ? 'border-red-500' : ''}`}
                             />
                             <span className="text-muted-foreground">%</span>
                           </div>
-                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.specificAssetRate && (
-                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.specificAssetRate?.message}</p>
+                          {errors?.fees?.exit?.specificAssetRate && (
+                            <p className="text-red-500 text-xs">{errors.fees.exit.specificAssetRate.message}</p>
                           )}
                         </div>
 
@@ -244,10 +253,10 @@ export function FeeConfigStep({ watchedValues, setValue, vaultOwnerAddress, erro
                             max="100"
                             value={currentFeeState?.rate || ""}
                             onChange={(e) => setValue(`fees.${feeType.id}.rate` as any, e.target.value)}
-                            className={currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.rate ? 'border-red-500' : ''}
+                            className={errors?.fees?.[feeType.id]?.rate ? 'border-red-500' : ''}
                           />
-                          {currentFeeState?.enabled && errors?.fees?.[feeType.id as keyof typeof errors.fees]?.rate && (
-                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as keyof typeof errors.fees]?.rate?.message}</p>
+                          {errors?.fees?.[feeType.id as 'management' | 'performance' | 'entrance' | 'exit']?.rate && (
+                            <p className="text-red-500 text-xs">{errors.fees[feeType.id as 'management' | 'performance' | 'entrance' | 'exit']?.rate?.message}</p>
                           )}
                         </div>
 

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { type Deployment } from "@/lib/consts";
+import { getNetworkByDeployment, type Deployment } from "@/lib/consts";
 import { useDeployment } from "@/lib/hooks/useDeployment";
 import { BasicInfoStep } from "./steps/BasicInfoStep";
 import { FeeConfigStep } from "./steps/FeeConfigStep";
@@ -13,153 +13,29 @@ import { AssetManagementStep } from "./steps/AssetManagementStep";
 import { ReviewStep } from "./steps/ReviewStep";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { type Address, type Hex } from 'viem';
 import { type CreateVaultFormData } from '@/types/vault';
-import { logVaultFees } from '@/lib/feeDebug';
+import { createVaultSchema, stepSchemas } from '@/types/vaultSchemas';
+import { defaultVaultFormData } from '@/types/vaultDefaults';
+import { VAULT_CREATION_STEPS, getStepIndex, getRequiredFields, getValidationSchema, getStepById, getNextStep, getPreviousStep, type VaultCreationStepId } from '@/types/vaultSteps';
+import { logFeesConfig } from '@/lib/feeConfigLog';
+import { logPoliciesConfig } from "@/lib/policyConfigLog";
 import { encodeFeeData } from '@/lib/feeConfigEncode';
-import { Fee } from "@enzymefinance/sdk/Configuration";
-
+import { encodePolicyData, type PolicyEncodingContext } from '@/lib/policyConfigEncode';
+import { Fee, Policy } from "@enzymefinance/sdk/Configuration";
 
 // Import Enzyme SDK
 import { LifeCycle } from "@enzymefinance/sdk";
 import { CUSTOM_SEPOLIA_ENVIRONMENT } from '@/config/sepolia-environment';
 import { waitForTransactionReceipt } from 'viem/actions';
+import { convertToSeconds } from './steps/RedemptionsPolicyStep';
 
 interface CreateVaultFormProps {
   deployment: Deployment;
 }
-
-const createVaultSchema = z.object({
-  vaultName: z.string().min(1, "Vault name is required"),
-  vaultSymbol: z.string().min(1, "Vault symbol is required").max(10, "Symbol must be 10 characters or less"),
-  denominationAsset: z.string().min(1, "Denomination asset is required"),
-  fees: z.object({
-    management: z.object({
-      enabled: z.boolean(),
-      rate: z.string().default("0"),
-      recipient: z.string().default("0x"),
-    }).refine((data) => {
-      if (data.enabled) {
-        const rate = parseFloat(data.rate);
-        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
-      }
-      return true;
-    }, {
-      message: "Management fee rate is required when fee is enabled",
-      path: ["rate"],
-    }),
-    performance: z.object({
-      enabled: z.boolean(),
-      rate: z.string().default("0"),
-      recipient: z.string().default("0x"),
-    }).refine((data) => {
-      if (data.enabled) {
-        const rate = parseFloat(data.rate);
-        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
-      }
-      return true;
-    }, {
-      message: "Performance fee rate is required when fee is enabled",
-      path: ["rate"],
-    }),
-    entrance: z.object({
-      enabled: z.boolean(),
-      rate: z.string().default("0"),
-      allocation: z.string().default("vault"),
-      recipient: z.string().default("0x"),
-    }).refine((data) => {
-      if (data.enabled) {
-        const rate = parseFloat(data.rate);
-        return data.rate.trim() !== "" && !isNaN(rate) && rate > 0;
-      }
-      return true;
-    }, {
-      message: "Entrance fee rate is required when fee is enabled",
-      path: ["rate"],
-    }),
-    exit: z.object({
-      enabled: z.boolean(),
-      inKindRate: z.string().default("0"),
-      specificAssetRate: z.string().default("0"),
-      allocation: z.string().default("vault"),
-      recipient: z.string().default("0x"),
-    })
-      .refine((data) => {
-        if (!data.enabled) return true;
-        const inKindRate = parseFloat(data.inKindRate);
-        return data.inKindRate.trim() !== "" && !isNaN(inKindRate) && inKindRate > 0;
-      }, {
-        message: "In-kind redemption rate is required when exit fee is enabled",
-        path: ["inKindRate"],
-      })
-      .refine((data) => {
-        if (!data.enabled) return true;
-        const specificAssetRate = parseFloat(data.specificAssetRate);
-        return data.specificAssetRate.trim() !== "" && !isNaN(specificAssetRate) && specificAssetRate > 0;
-      }, {
-        message: "Specific asset redemption rate is required when exit fee is enabled",
-        path: ["specificAssetRate"],
-      }),
-  }),
-  policies: z.array(z.object({
-    type: z.string(),
-    settings: z.string(),
-  })),
-  depositPolicies: z.object({
-    limitWalletsEnabled: z.boolean().optional(),
-    depositLimitsEnabled: z.boolean().optional(),
-    allowedWallets: z.array(z.string()).optional(),
-    minDeposit: z.string().optional(),
-    maxDeposit: z.string().optional(),
-    rejectAllDeposits: z.boolean().optional(),
-  }).optional(),
-  sharesPolicies: z.object({
-    restrictSharesTransfer: z.boolean().optional(),
-    allowedTransferWallets: z.array(z.string()).optional(),
-  }).optional(),
-}) satisfies z.ZodType<CreateVaultFormData>;
-
-const STEPS = [
-  {
-    id: 'basic',
-    title: 'Basic Info',
-    description: 'Name, symbol & asset'
-  },
-  {
-    id: 'fees',
-    title: 'Fee Setup',
-    description: 'Management & performance'
-  },
-  {
-    id: 'deposits',
-    title: 'Deposits',
-    description: 'Deposit policies'
-  },
-  {
-    id: 'shares',
-    title: 'Shares transferability',
-    description: 'Share transfer rules'
-  },
-  {
-    id: 'redemptions',
-    title: 'Redemptions',
-    description: 'Redemption policies'
-  },
-  {
-    id: 'assets',
-    title: 'Asset management',
-    description: 'Asset policies'
-  },
-  {
-    id: 'review',
-    title: 'Review',
-    description: 'Confirm & deploy'
-  }
-];
 
 export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   const deploymentState = useDeployment();
@@ -170,9 +46,13 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   // Use the detected deployment from wallet, fallback to prop
   const currentDeployment = deploymentState.deployment || deployment;
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStepId, setCurrentStepId] = useState<VaultCreationStepId>('basic');
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
-  const [policies, setPolicies] = useState<{ type: string; settings: string }[]>([]);
+
+  // Derived values using vaultSteps utilities
+  const currentStepIndex = getStepIndex(currentStepId);
+  const currentStepConfig = getStepById(currentStepId);
+
 
   const {
     register,
@@ -180,36 +60,27 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
     setValue,
     watch,
     trigger,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateVaultFormData>({
     resolver: zodResolver(createVaultSchema),
-    defaultValues: {
-      vaultName: "",
-      vaultSymbol: "",
-      denominationAsset: "",
-      fees: {
-        management: { enabled: false, rate: "", recipient: "" },
-        performance: { enabled: false, rate: "", recipient: "" },
-        entrance: { enabled: false, rate: "", allocation: "vault", recipient: "" },
-        exit: { enabled: false, inKindRate: "", specificAssetRate: "", allocation: "vault", recipient: "" },
-      },
-      policies: [],
-      depositPolicies: {
-        limitWalletsEnabled: false,
-        depositLimitsEnabled: false,
-        allowedWallets: [],
-        minDeposit: "",
-        maxDeposit: "",
-        rejectAllDeposits: false,
-      },
-      sharesPolicies: {
-        restrictSharesTransfer: false,
-        allowedTransferWallets: [],
-      },
-    } satisfies CreateVaultFormData,
+    defaultValues: defaultVaultFormData,
+    // Keep form data in React state for step navigation
+    // Data persists during session but clears when leaving form
+    mode: "onChange",
   });
 
   const watchedValues = watch();
+
+
+  // Clean up when component unmounts (user leaves create vault form)
+  useEffect(() => {
+    return () => {
+      console.log('CreateVaultForm unmounting - form data will be cleared');
+      // React Hook Form state is automatically cleared on unmount
+      // No localStorage persistence needed
+    };
+  }, []);
 
   // Helper function to parse vault creation result from transaction logs
   const parseVaultCreationResult = (logs: any[], txHash: string) => {
@@ -237,6 +108,13 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
   const onSubmit = async (data: CreateVaultFormData) => {
     console.log('=== VAULT CREATION DEBUG ===');
 
+    // Safety check: only allow submission on the review step
+    if (currentStepId !== 'review') {
+      console.warn('⚠️ Form submission attempted on non-review step:', currentStepId);
+      console.warn('This should not happen - preventing submission');
+      return;
+    }
+
     // Check if on supported network
     if (deploymentState.needsNetworkSwitch) {
       alert('Please switch to a supported network (Ethereum, Polygon, or Sepolia) first');
@@ -260,34 +138,61 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       console.log("Environment:", CUSTOM_SEPOLIA_ENVIRONMENT);
       console.log("Fund Deployer:", CUSTOM_SEPOLIA_ENVIRONMENT.contracts?.fundDeployer);
 
-      logVaultFees(data);
-      
+      logFeesConfig(data);
+
       // Fee validation and encoding - this is where validation errors are caught
       console.log("🔍 Starting fee validation and encoding...");
       const encodedFees = encodeFeeData(data.fees, currentDeployment);
-      console.log("✅ Fee validation passed, proceeding with vault creation...");
-      
-      // Store original fee rates for future reference (optional)
-      const originalFeeRates = {
-        management: data.fees.management.enabled ? data.fees.management.rate : null,
-        performance: data.fees.performance.enabled ? data.fees.performance.rate : null,
-        entrance: data.fees.entrance.enabled ? data.fees.entrance.rate : null,
-        exit: data.fees.exit.enabled ? {
-          inKind: data.fees.exit.inKindRate,
-          specificAsset: data.fees.exit.specificAssetRate
-        } : null,
-      };
-      console.log("💾 Original fee rates:", originalFeeRates);
+      console.log("✅ Fees encoded successfully:", encodedFees);
       const feeManagerConfigData = encodedFees.length === 0
         ? "0x" as Hex
         : Fee.encodeSettings(encodedFees);
 
-      // logVaultPolicy(data);
-      // const policyManagerConfigData = data.policies.map(policy => ({
+      // Store original fee rates for future reference (optional)
+      // const originalFeeRates = {
+      //   management: data.fees.management.enabled ? data.fees.management.rate : null,
+      //   performance: data.fees.performance.enabled ? data.fees.performance.rate : null,
+      //   entrance: data.fees.entrance.enabled ? data.fees.entrance.rate : null,
+      //   exit: data.fees.exit.enabled ? {
+      //     inKind: data.fees.exit.inKindRate,
+      //     specificAsset: data.fees.exit.specificAssetRate
+      //   } : null,
+      // };
+      // console.log("💾 Original fee rates:", originalFeeRates);
+
+      logPoliciesConfig(data);
+
+      // Policy validation and encoding with list creation
+      console.log("🔍 Policy configuration:", data.policies);
+
+      // Create policy encoding context
+      const policyContext: PolicyEncodingContext = {
+        walletClient,
+        publicClient,
+        vaultOwner: address
+      };
+
+      console.log("🏠 Creating address lists and encoding policies...");
+
+      const encodedPolicies = encodePolicyData(data.policies, data.denominationAsset as Address, currentDeployment);
+      console.log("✅ Policies encoded successfully:", encodedPolicies);
+
+      const policyManagerConfigData = encodedPolicies.length === 0
+        ? "0x" as Hex
+        : Policy.encodeSettings(encodedPolicies);
+
+      // Convert shares lock-up period to seconds
+      const sharesActionTimelockInSeconds = BigInt(
+        convertToSeconds(data.sharesLockUpPeriod.value, data.sharesLockUpPeriod.unit)
+      );
+      console.log("🔒 Shares lock-up period:", {
+        original: `${data.sharesLockUpPeriod.value} ${data.sharesLockUpPeriod.unit}`,
+        seconds: sharesActionTimelockInSeconds.toString()
+      });
 
       // Validate required fields
-      if (!data.vaultName || !data.vaultSymbol || !data.denominationAsset) {
-        throw new Error('Missing required fields: vaultName, vaultSymbol, or denominationAsset');
+      if (!data.vaultName || !data.vaultSymbol || !data.denominationAsset || !data.sharesLockUpPeriod) {
+        throw new Error('Missing required fields: vaultName, vaultSymbol, denominationAsset, or sharesLockUpPeriod');
       }
 
       // Prepare parameters with detailed logging
@@ -297,9 +202,9 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
         name: data.vaultName,
         symbol: data.vaultSymbol,
         denominationAsset: data.denominationAsset as Address,
-        sharesActionTimelockInSeconds: 0n,
+        sharesActionTimelockInSeconds: sharesActionTimelockInSeconds,
         feeManagerConfigData: feeManagerConfigData,
-        policyManagerConfigData: '0x' as const,
+        policyManagerConfigData: policyManagerConfigData, // Use empty policy config for now
       };
 
       console.log("Vault parameters:", vaultParams);
@@ -384,6 +289,8 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
 
       ${result.message}`);
 
+      console.log("Vault created successfully:", data.vaultName, data.vaultSymbol);
+
     } catch (error) {
       console.error('=== VAULT CREATION ERROR ===');
       console.error('Full error object:', error);
@@ -397,45 +304,73 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       }
 
       alert(`❌ Vault creation failed: ${errorMessage}\n\nCheck the browser console for detailed error information.`);
+
+      console.log("Vault creation failed:", errorMessage);
     }
   };
 
   const nextStep = async () => {
-    let fieldsToValidate: (keyof CreateVaultFormData)[] = [];
+    // Get required fields for current step
+    const requiredFields = getRequiredFields(currentStepId);
 
-    switch (currentStep) {
-      case 0:
-        fieldsToValidate = ['vaultName', 'vaultSymbol', 'denominationAsset'];
-        break;
-      case 1:
-        // Validate fees step
-        fieldsToValidate = ['fees'];
-        break;
-      case 2:
-      case 3:
-      case 4:
-      case 5:
-        // Other steps are optional for now
-        break;
+    // Get validation schema for current step
+    const validationSchemaKey = getValidationSchema(currentStepId);
+
+    // For fees step, we need to trigger validation on all fee fields to populate errors
+    if (currentStepId === 'fees') {
+      const isValid = await trigger('fees');
+      if (!isValid) {
+        console.log('Fee validation failed');
+        return;
+      }
+    } else if (currentStepId === 'deposits') {
+      // For deposits step, trigger policy validation
+      const isValid = await trigger('policies');
+      if (!isValid) {
+        console.log('Policy validation failed');
+        return;
+      }
+    } else if (currentStepId === 'transferability') {
+      // For transferability step, trigger policy validation
+      const isValid = await trigger('policies');
+      if (!isValid) {
+        console.log('Transferability policy validation failed');
+        return;
+      }
+    } else if (currentStepId === 'redemptions') {
+      // For redemptions step, trigger validation on required fields
+      const isValid = await trigger('sharesLockUpPeriod');
+      if (!isValid) {
+        console.log('Redemptions validation failed');
+        return;
+      }
+    } else if (requiredFields.length > 0) {
+      // For other steps, validate required fields
+      const isValid = await trigger(requiredFields as any);
+      if (!isValid) {
+        console.log('Validation failed for step:', currentStepId);
+        return;
+      }
     }
 
-    if (fieldsToValidate.length > 0) {
-      const isValid = await trigger(fieldsToValidate);
-      if (!isValid) return;
+    // Navigate using utility functions
+    const nextStepId = getNextStep(currentStepId);
+    if (nextStepId) {
+      setCurrentStepId(nextStepId);
+      setVisitedSteps(prev => new Set([...prev, getStepIndex(nextStepId)]));
     }
-
-    const nextStepIndex = Math.min(currentStep + 1, STEPS.length - 1);
-    setCurrentStep(nextStepIndex);
-    setVisitedSteps(prev => new Set([...prev, nextStepIndex]));
   };
 
   const prevStep = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 0));
+    const previousStepId = getPreviousStep(currentStepId);
+    if (previousStepId) {
+      setCurrentStepId(previousStepId);
+    }
   };
 
-  const goToStep = (stepIndex: number) => {
-    setCurrentStep(stepIndex);
-    setVisitedSteps(prev => new Set([...prev, stepIndex]));
+  const goToStep = (stepId: VaultCreationStepId) => {
+    setCurrentStepId(stepId);
+    setVisitedSteps(prev => new Set([...prev, getStepIndex(stepId)]));
   };
 
   const isStepCompleted = (stepIndex: number) => {
@@ -443,17 +378,32 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
       return false;
     }
 
-    switch (stepIndex) {
-      case 0:
+    const step = VAULT_CREATION_STEPS[stepIndex];
+    if (!step) {
+      return false;
+    }
+
+    switch (step.id) {
+      case 'basic':
         return watchedValues.vaultName && watchedValues.vaultSymbol && watchedValues.denominationAsset;
+      case 'redemptions':
+        return watchedValues.sharesLockUpPeriod?.value && watchedValues.sharesLockUpPeriod?.unit;
+      case 'fees':
+        // Fee step is always considered complete (fees are optional)
+        return true;
+      case 'deposits':
+      case 'transferability':
+      case 'assets':
+        // Policy steps are always considered complete (policies are optional)
+        return true;
       default:
-        return true; // Other steps are optional for basic vault creation
+        return true;
     }
   };
 
   const renderStepContent = () => {
-    switch (currentStep) {
-      case 0:
+    switch (currentStepId) {
+      case 'basic':
         return (
           <BasicInfoStep
             register={register}
@@ -463,38 +413,52 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
             deployment={currentDeployment}
           />
         );
-      case 1:
+      case 'fees':
         return (
           <FeeConfigStep
             watchedValues={watchedValues}
             setValue={setValue}
-            vaultOwnerAddress={address}
+            vaultOwnerAddress={address || undefined}
             errors={errors}
           />
         );
-      case 2:
+      case 'deposits':
         return (
           <DepositsPolicyStep
             watchedValues={watchedValues}
             setValue={setValue}
+            errors={errors}
           />
         );
-      case 3:
+      case 'transferability':
         return (
           <SharesTransferabilityStep
             watchedValues={watchedValues}
             setValue={setValue}
+            errors={errors}
           />
         );
-      case 4:
-        return <RedemptionsPolicyStep />;
-      case 5:
-        return <AssetManagementStep />;
-      case 6:
+      case 'redemptions':
+        return (
+          <RedemptionsPolicyStep
+            watchedValues={watchedValues}
+            setValue={setValue}
+            errors={errors}
+          />
+        );
+      case 'assets':
+        return (
+          <div className="text-center py-12">
+            <h3 className="text-lg font-semibold mb-2">Trading Policies</h3>
+            <p className="text-muted-foreground">
+              Asset policy configuration will be available here soon.
+            </p>
+          </div>
+        );
+      case 'review':
         return (
           <ReviewStep
             watchedValues={watchedValues}
-            policies={policies}
             deployment={currentDeployment}
           />
         );
@@ -514,26 +478,26 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
         {/* Step Navigation */}
         <div className="lg:col-span-1">
           <div className="space-y-2">
-            {STEPS.map((step, index) => (
+            {VAULT_CREATION_STEPS.map((step, index) => (
               <button
                 key={step.id}
                 type="button"
-                onClick={() => goToStep(index)}
-                className={`w-full text-left p-4 rounded-lg border transition-colors ${index === currentStep
+                onClick={() => goToStep(step.id)}
+                className={`w-full text-left p-4 rounded-lg border transition-colors ${step.id === currentStepId
                   ? 'bg-primary/10 border-primary text-primary'
-                  : index < currentStep
+                  : index < currentStepIndex
                     ? 'bg-muted/50 border-muted-foreground/20 text-muted-foreground hover:bg-muted'
                     : 'border-border hover:bg-muted/50'
                   }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${index === currentStep
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${step.id === currentStepId
                     ? 'bg-primary text-primary-foreground'
                     : isStepCompleted(index)
                       ? 'bg-green-500 text-white'
                       : 'bg-muted text-muted-foreground'
                     }`}>
-                    {isStepCompleted(index) && index !== currentStep ? (
+                    {isStepCompleted(index) && step.id !== currentStepId ? (
                       <Check className="h-4 w-4" />
                     ) : (
                       index + 1
@@ -563,14 +527,18 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={prevStep}
-                disabled={currentStep === 0}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  prevStep();
+                }}
+                disabled={currentStepIndex === 0}
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Previous
               </Button>
 
-              {currentStep === STEPS.length - 1 ? (
+              {currentStepIndex === VAULT_CREATION_STEPS.length - 1 ? (
                 <Button
                   type="submit"
                   disabled={isSubmitting || deploymentState.needsNetworkSwitch}
@@ -584,7 +552,14 @@ export function CreateVaultForm({ deployment }: CreateVaultFormProps) {
                   }
                 </Button>
               ) : (
-                <Button type="button" onClick={nextStep}>
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    nextStep();
+                  }}
+                >
                   Next
                   <ChevronRight className="h-4 w-4 ml-2" />
                 </Button>

@@ -81,7 +81,9 @@ function SettingItem({ label, value, helpText }: { label: string; value: string;
       <span className="text-sm text-gray-500">{label}</span>
       <span className="text-sm font-medium text-gray-900">{value}</span>
       {helpText && (
-        <HelpCircle className="w-3 h-3 text-gray-400" title={helpText} />
+        <span title={helpText}>
+          <HelpCircle className="w-3 h-3 text-gray-400" />
+        </span>
       )}
     </div>
   );
@@ -203,13 +205,15 @@ export function FeeTab({ vault, deployment, comptrollerProxy }: FeeTabProps) {
                         : "0.00%"
                       }
                     />
-                    {feeData?.fees.performance.enabled && feeData.fees.performance.highWaterMark && (
-                      <SettingItem
-                        label="High watermark"
-                        value={`${formatUnits(feeData.fees.performance.highWaterMark, 18)} USDC`}
-                        helpText="Performance fee is only charged above this threshold"
-                      />
-                    )}
+                    {feeData?.fees.performance.enabled &&
+                      feeData.fees.performance.highWaterMark != null &&
+                      feeData.fees.performance.highWaterMark > 0n && (
+                        <SettingItem
+                          label="High watermark"
+                          value={`${formatUnits(feeData.fees.performance.highWaterMark, 18)} USDC`}
+                          helpText="Performance fee is only charged above this threshold"
+                        />
+                      )}
                   </div>
                 }
                 recipient={
@@ -239,7 +243,9 @@ export function FeeTab({ vault, deployment, comptrollerProxy }: FeeTabProps) {
                     feeData.fees.entrance.feeType === 'burn' ? (
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">Vault</span>
-                        <HelpCircle className="w-3 h-3 text-gray-400" title="Entrance fee tokens are burned" />
+                        <span title="Entrance fee tokens are burned">
+                          <HelpCircle className="w-3 h-3 text-gray-400" />
+                        </span>
                       </div>
                     ) : (
                       feeData.fees.entrance.recipient ? (
@@ -281,10 +287,12 @@ export function FeeTab({ vault, deployment, comptrollerProxy }: FeeTabProps) {
                     feeData.fees.exit.feeType === 'burn' ? (
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">Vault</span>
-                        <HelpCircle className="w-3 h-3 text-gray-400" title="Entrance fee tokens are burned" />
+                        <span title="Exit fee tokens are burned">
+                          <HelpCircle className="w-3 h-3 text-gray-400" />
+                        </span>
                       </div>
                     ) : (
-                      feeData.fees.entrance.recipient ? (
+                      feeData.fees.exit.recipient ? (
                         <AddressDisplay address={feeData.fees.exit.recipient} />
                       ) : (
                         <span className="text-sm text-gray-400">Not configured</span>

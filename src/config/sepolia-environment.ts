@@ -69,7 +69,10 @@ export const CUSTOM_SEPOLIA_ENVIRONMENT: Environment = {
         entranceRateDirectFee: '0xA7259E45c7Be47a5bED94EDc252FADB09769a326',
         exitRateDirectFee: '0xD00DD49568CE5f8894E7a10f33c0AC513D9552c4',
         exitRateBurnFee: '0xd41fd35227c57cF3Bb3884234EB6c39738Ff7C3B',
-        minSharesSupplyFee: '0xeA806dc949353fb396012C67bcbE4c0C00066afB'
+        minSharesSupplyFee: '0xeA806dc949353fb396012C67bcbE4c0C00066afB',
+
+        // Adapters:
+        uniswapV2Adapter: '0xb179bA4c1b407E24610b410bA383Aadc2e3B88Be'
     },
     subgraph: {
         // You'll need to deploy your own subgraph or use a public one for Sepolia

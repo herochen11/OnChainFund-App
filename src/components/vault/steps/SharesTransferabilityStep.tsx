@@ -4,78 +4,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { WalletAddressManager } from "@/components/WalletAddressManager";
-import { AlertTriangle, X } from "lucide-react";
-import React, { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
-import { UseFormSetValue } from "react-hook-form";
+import { AlertTriangle } from "lucide-react";
 import type { CreateVaultFormData } from '@/types/vault';
+import { UseFormSetValue, type FieldErrors } from "react-hook-form";
+import { useEffect } from "react";
 
 interface SharesTransferabilityStepProps {
   watchedValues: CreateVaultFormData;
   setValue: UseFormSetValue<CreateVaultFormData>;
+  errors?: FieldErrors<CreateVaultFormData>;
 }
 
-export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTransferabilityStepProps) {
-  const { address, isConnected } = useAccount();
+export function SharesTransferabilityStep({ watchedValues, setValue, errors }: SharesTransferabilityStepProps) {
 
-  // Helper function to format wallet addresses
-  const formatAddress = (addr: string) => {
-    if (!addr || addr.length <= 10) return addr;
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
+  // Simple debug logging like other steps
+  console.log('SharesTransferabilityStep errors:', errors);
 
-  // Get shares policies from form data
-  const sharesPolicies = watchedValues.sharesPolicies || {};
-  const {
-    restrictSharesTransfer = false,
-    allowedTransferWallets = [],
-  } = sharesPolicies;
+  // Destructure values from watchedValues.policies for share transfer policy
+  const allowedSharesTransferRecipients = watchedValues.policies?.allowedSharesTransferRecipients || { enabled: false };
 
-  // Local state for disallow all transfers
-  const [disallowAllTransfers, setDisallowAllTransfers] = useState(false);
+  // Extract settings with defaults
+  const shareTransferRecipientsList = allowedSharesTransferRecipients.settings?.newListsArgs?.[0]?.initialItems || [];
 
-  // Initialize form values
+  // useEffect to set initial default values if they are undefined in watchedValues
   useEffect(() => {
-    if (sharesPolicies.restrictSharesTransfer === undefined) {
-      setValue("sharesPolicies.restrictSharesTransfer", false);
+    if (!watchedValues.policies?.allowedSharesTransferRecipients) {
+      setValue("policies.allowedSharesTransferRecipients", { enabled: false });
     }
-    if (sharesPolicies.allowedTransferWallets === undefined) {
-      setValue("sharesPolicies.allowedTransferWallets", []);
-    }
-  }, [sharesPolicies, setValue]);
-
-  // Update policies when settings change
-  useEffect(() => {
-    if (restrictSharesTransfer) {
-      const policies = [...(watchedValues.policies || [])];
-      const existingPolicyIndex = policies.findIndex(p => p.type === 'AllowedSharesTransferRecipientsPolicy');
-      
-      const policyData = {
-        type: 'AllowedSharesTransferRecipientsPolicy',
-        settings: JSON.stringify({
-          allowedRecipients: allowedTransferWallets,
-          disallowAllTransfers
-        })
-      };
-
-      if (existingPolicyIndex >= 0) {
-        policies[existingPolicyIndex] = policyData;
-      } else {
-        policies.push(policyData);
-      }
-
-      setValue('policies', policies);
-    } else {
-      // Remove the policy if disabled
-      const policies = (watchedValues.policies || []).filter(p => p.type !== 'AllowedSharesTransferRecipientsPolicy');
-      setValue('policies', policies);
-    }
-  }, [restrictSharesTransfer, allowedTransferWallets, disallowAllTransfers, setValue, watchedValues.policies]);
-
-
+  }, [watchedValues, setValue]);
 
   return (
     <div className="space-y-6">
@@ -99,59 +57,73 @@ export function SharesTransferabilityStep({ watchedValues, setValue }: SharesTra
             <CardTitle className="text-lg">Restrict Wallets Permitted To Receive A Share Transfer</CardTitle>
           </div>
           <Switch
-            checked={restrictSharesTransfer}
-            onCheckedChange={(checked) => setValue("sharesPolicies.restrictSharesTransfer", checked)}
+            // Bind checked state to the value from react-hook-form
+            checked={allowedSharesTransferRecipients.enabled}
+            // Update the form state using setValue when the switch changes
+            onCheckedChange={(checked) => {
+              setValue("policies.allowedSharesTransferRecipients", {
+                enabled: checked,
+                settings: checked ? {
+                  existingListIds: [],
+                  newListsArgs: [{
+                    updateType: "0",
+                    initialItems: shareTransferRecipientsList,
+                  }],
+                } : undefined,
+              });
+            }}
           />
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-sm">
               If enabled, restricts the potential recipients of shares transferred outside of the normal asset deposit and share minting process.
             </p>
-            <p>
+            <p className="text-muted-foreground text-sm">
               This policy acts in concert with but not as a replacement for the policy which restricts wallets able to receive minted shares.
             </p>
-            <p>
+            <p className="text-muted-foreground text-sm">
               In general, if you enable this policy to restrict who can receive shares that are already minted, you should also restrict who can mint new shares to the same list of wallets.
             </p>
           </div>
 
-          {restrictSharesTransfer && (
-            <>
-              <Button variant="outline" size="sm" className="text-green-600 border-green-600">
-                Editable Setting
-              </Button>
+          {
+            allowedSharesTransferRecipients.enabled && (
+              <>
+                <Button variant="outline" size="sm" className="text-green-600 border-green-600">
+                  Editable Setting
+                </Button>
 
-              <div className="space-y-4 p-4 border border-blue-500 rounded-lg bg-blue-50/50">
-                <h4 className="font-medium text-blue-900">Restrict Wallets Permitted To Receive A Share Transfer</h4>
-
-                <WalletAddressManager
-                  addresses={allowedTransferWallets}
-                  setAddresses={(addresses) => setValue("sharesPolicies.allowedTransferWallets", addresses)}
-                  placeholder="Enter address ..."
-                  showOwnerButton={true}
-                />
-
-                <div className="pt-4 border-t space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="disallow-all-transfers"
-                      checked={disallowAllTransfers}
-                      onCheckedChange={setDisallowAllTransfers}
-                    />
-                    <Label htmlFor="disallow-all-transfers" className="font-medium">
-                      Disallow all transfers
-                    </Label>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    If enabled, no shares can be transferred to any wallet (including the owner). This setting can be changed later.
-                  </p>
+                <div className="space-y-4 p-4 border border-blue-500 rounded-lg bg-blue-50/50">
+                  <h4 className="font-medium text-blue-900">Restrict Wallets Permitted To Receive A Share Transfer</h4>
+                  <WalletAddressManager
+                    // Bind addresses to the value from react-hook-form
+                    addresses={shareTransferRecipientsList}
+                    // Update the form state using setValue when addresses change
+                    setAddresses={(newAddresses) => {
+                      setValue("policies.allowedSharesTransferRecipients", {
+                        enabled: true,
+                        settings: {
+                          existingListIds: [],
+                          newListsArgs: [{
+                            updateType: "0",
+                            initialItems: newAddresses,
+                          }],
+                        },
+                      });
+                    }}
+                    placeholder="Enter address ..."
+                    showOwnerButton={true}
+                  />
+                  {errors?.policies?.allowedSharesTransferRecipients?.settings && (
+                    <p className="text-red-500 text-xs">{errors.policies.allowedSharesTransferRecipients.settings.message}</p>
+                  )}
                 </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+              </>
+            )
+          }
+        </CardContent >
+      </Card >
+    </div >
   );
 }

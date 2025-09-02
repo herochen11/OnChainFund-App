@@ -26,8 +26,6 @@ export function encodeFeeData(
 
 
             // Use a switch statement to handle the specific encoding logic for each fee type.
-            // NOTE: The parameters for encodeSettings() are based on common assumptions for
-            // these types of fees. You may need to adjust them based on the exact Enzyme SDK.
             switch (feeId) {
                 case "management": {
                     // Parse the rate string to a number and convert to percentage as needed

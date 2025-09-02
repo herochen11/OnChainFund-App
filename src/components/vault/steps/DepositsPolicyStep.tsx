@@ -8,59 +8,41 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { WalletAddressManager } from "@/components/WalletAddressManager";
 import { AlertTriangle } from "lucide-react";
-import { UseFormSetValue, UseFormWatch } from "react-hook-form";
-import { useEffect } from "react"; // Import useEffect to potentially set initial values if needed
-
-// Define the structure of the form data for this step
-interface DepositsFormData {
-  limitWalletsEnabled: boolean;
-  depositLimitsEnabled: boolean;
-  allowedWallets: string[];
-  minDeposit: string;
-  maxDeposit: string;
-  rejectAllDeposits: boolean;
-}
+import type { CreateVaultFormData } from '@/types/vault';
+import { UseFormSetValue, type FieldErrors } from "react-hook-form";
+import { useEffect, useState } from "react";
 
 interface DepositsPolicyStepProps {
-  // watchedValues will contain the current values of the form fields
-  watchedValues: DepositsFormData;
-  // setValue is used to programmatically update form field values
-  setValue: UseFormSetValue<DepositsFormData>;
+  watchedValues: CreateVaultFormData;
+  setValue: UseFormSetValue<CreateVaultFormData>;
+  errors?: FieldErrors<CreateVaultFormData>;
 }
 
-export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicyStepProps) {
+export function DepositsPolicyStep({ watchedValues, setValue, errors }: DepositsPolicyStepProps) {
 
-  // Destructure values from watchedValues for easier access
-  // These values are now controlled by react-hook-form
-  const {
-    limitWalletsEnabled,
-    depositLimitsEnabled,
-    allowedWallets,
-    minDeposit,
-    maxDeposit,
-    rejectAllDeposits, // This state is not yet used in the UI, but kept for consistency
-  } = watchedValues;
+  // Simple debug logging like BasicInfoStep
+  console.log('DepositsPolicyStep errors:', errors);
+
+  // Destructure values from watchedValues.policies for deposit-related policies
+  const minMaxInvestment = watchedValues.policies?.minMaxInvestment || { enabled: false };
+  const allowedDepositRecipients = watchedValues.policies?.allowedDepositRecipients || { enabled: false };
+
+  // Extract settings with defaults
+  const minInvestmentAmount = minMaxInvestment.settings?.minInvestmentAmount || "";
+  const maxInvestmentAmount = minMaxInvestment.settings?.maxInvestmentAmount || "";
+  const depositRecipientsList = allowedDepositRecipients.settings?.newListsArgs?.[0]?.initialItems || [];
+
+  // Track "disallow all" and "reject all" states
+  const [disallowAllAddresses, setDisallowAllAddresses] = useState(false);
+  const [rejectAllDeposits, setRejectAllDeposits] = useState(false);
 
   // useEffect to set initial default values if they are undefined in watchedValues.
-  // This is important if the parent form doesn't provide initial values for these fields.
   useEffect(() => {
-    if (watchedValues.limitWalletsEnabled === undefined) {
-      setValue("limitWalletsEnabled", false);
+    if (!watchedValues.policies?.minMaxInvestment) {
+      setValue("policies.minMaxInvestment", { enabled: false });
     }
-    if (watchedValues.depositLimitsEnabled === undefined) {
-      setValue("depositLimitsEnabled", false);
-    }
-    if (watchedValues.allowedWallets === undefined) {
-      setValue("allowedWallets", []);
-    }
-    if (watchedValues.minDeposit === undefined) {
-      setValue("minDeposit", "");
-    }
-    if (watchedValues.maxDeposit === undefined) {
-      setValue("maxDeposit", "");
-    }
-    if (watchedValues.rejectAllDeposits === undefined) {
-      setValue("rejectAllDeposits", false);
+    if (!watchedValues.policies?.allowedDepositRecipients) {
+      setValue("policies.allowedDepositRecipients", { enabled: false });
     }
   }, [watchedValues, setValue]);
 
@@ -88,9 +70,20 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
           </div>
           <Switch
             // Bind checked state to the value from react-hook-form
-            checked={limitWalletsEnabled}
+            checked={allowedDepositRecipients.enabled}
             // Update the form state using setValue when the switch changes
-            onCheckedChange={(checked) => setValue("depositPolicies.limitWalletsEnabled", checked)}
+            onCheckedChange={(checked) => {
+              setValue("policies.allowedDepositRecipients", {
+                enabled: checked,
+                settings: checked ? {
+                  existingListIds: [],
+                  newListsArgs: [{
+                    updateType: "0",
+                    initialItems: depositRecipientsList,
+                  }],
+                } : undefined,
+              });
+            }}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -98,7 +91,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
             This policy acts in concert with but not as a replacement for the policy restricting wallets permitted to receive a share transfer. For example, if you enable this policy but allow your vault shares to be freely transferable, you will limit access to new shares but not to existing ones.
           </p>
 
-          {limitWalletsEnabled && (
+          {allowedDepositRecipients.enabled && (
             <>
               <Button variant="outline" size="sm" className="text-green-600 border-green-600">
                 Editable Setting
@@ -106,26 +99,28 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
 
               <div className="space-y-4 p-4 border border-blue-500 rounded-lg bg-blue-50/50">
                 <h4 className="font-medium text-blue-900">Limit Wallets Permitted To Deposit</h4>
-
                 <WalletAddressManager
                   // Bind addresses to the value from react-hook-form
-                  addresses={allowedWallets}
+                  addresses={depositRecipientsList}
                   // Update the form state using setValue when addresses change
-                  setAddresses={(newAddresses) => setValue("depositPolicies.allowedWallets", newAddresses)}
+                  setAddresses={(newAddresses) => {
+                    setValue("policies.allowedDepositRecipients", {
+                      enabled: true,
+                      settings: {
+                        existingListIds: [],
+                        newListsArgs: [{
+                          updateType: "0",
+                          initialItems: newAddresses,
+                        }],
+                      },
+                    });
+                  }}
                   placeholder="Enter address ..."
                   showOwnerButton={true}
                 />
-
-                <div className="pt-4 border-t">
-                  <h5 className="font-medium mb-2">Disallow all depositor addresses</h5>
-                  <p className="text-sm text-muted-foreground">This setting can be changed later</p>
-                  {/* Assuming there might be a switch here for rejectAllDeposits for this section */}
-                  {/* For example: */}
-                  <Switch
-                    checked={rejectAllDeposits}
-                    onCheckedChange={(checked) => setValue("depositPolicies.rejectAllDeposits", checked)}
-                  />
-                </div>
+                {errors?.policies?.allowedDepositRecipients?.settings && (
+                  <p className="text-red-500 text-xs">{errors.policies.allowedDepositRecipients.settings.message}</p>
+                )}
               </div>
             </>
           )}
@@ -140,9 +135,17 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
           </div>
           <Switch
             // Bind checked state to the value from react-hook-form
-            checked={depositLimitsEnabled}
+            checked={minMaxInvestment.enabled}
             // Update the form state using setValue when the switch changes
-            onCheckedChange={(checked) => setValue("depositPolicies.depositLimitsEnabled", checked)}
+            onCheckedChange={(checked) => {
+              setValue("policies.minMaxInvestment", {
+                enabled: checked,
+                settings: checked ? {
+                  minInvestmentAmount: "",
+                  maxInvestmentAmount: "",
+                } : undefined,
+              });
+            }}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -155,7 +158,7 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
             </p>
           </div>
 
-          {depositLimitsEnabled && (
+          {minMaxInvestment.enabled && (
             <>
               <Button variant="outline" size="sm" className="text-green-600 border-green-600">
                 Editable Setting
@@ -170,15 +173,29 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                       <Input
-                        placeholder="0"
+                        placeholder="100"
+                        type="number"
+                        step="0.01"
+                        min="0"
                         // Bind value to the form state
-                        value={minDeposit}
+                        value={minInvestmentAmount}
                         // Update form state using setValue on change
-                        onChange={(e) => setValue("depositPolicies.minDeposit", e.target.value)}
-                        className="flex-1"
+                        onChange={(e) => {
+                          setValue("policies.minMaxInvestment", {
+                            enabled: true,
+                            settings: {
+                              minInvestmentAmount: e.target.value,
+                              maxInvestmentAmount: maxInvestmentAmount,
+                            },
+                          });
+                        }}
+                        className={`flex-1 ${errors?.policies?.minMaxInvestment?.settings ? 'border-red-500' : ''}`}
                       />
                       <span className="text-sm text-muted-foreground">DAI</span>
                     </div>
+                    {errors?.policies?.minMaxInvestment?.settings && (
+                      <p className="text-red-500 text-xs">{errors.policies.minMaxInvestment.settings.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -186,40 +203,26 @@ export function DepositsPolicyStep({ watchedValues, setValue }: DepositsPolicySt
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                       <Input
-                        placeholder="0"
+                        placeholder="1000000"
+                        type="number"
+                        step="0.01"
+                        min="0"
                         // Bind value to the form state
-                        value={maxDeposit}
+                        value={maxInvestmentAmount}
                         // Update form state using setValue on change
-                        onChange={(e) => setValue("depositPolicies.maxDeposit", e.target.value)}
-                        className="flex-1"
+                        onChange={(e) => {
+                          setValue("policies.minMaxInvestment", {
+                            enabled: true,
+                            settings: {
+                              minInvestmentAmount: minInvestmentAmount,
+                              maxInvestmentAmount: e.target.value,
+                            },
+                          });
+                        }}
+                        className={`flex-1 ${errors?.policies?.minMaxInvestment?.settings ? 'border-red-500' : ''}`}
                       />
                       <span className="text-sm text-muted-foreground">DAI</span>
                     </div>
-                  </div>
-                </div>
-
-                {(!minDeposit && !maxDeposit && !rejectAllDeposits) && ( // Added rejectAllDeposits to condition
-                  <Alert className="border-red-200 bg-red-50">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                    <AlertDescription className="text-red-700">
-                      Must specify either minimum or maximum amount, select "Reject all deposits", or disable the policy to unrestrict deposits.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="pt-4 border-t space-y-2">
-                  <h5 className="font-medium">Reject all deposits</h5>
-                  <p className="text-sm text-muted-foreground">
-                    If you choose to reject all deposits, no one (including yourself) will be able to invest in the vault. This setting can be changed later.
-                  </p>
-                  {/* Switch for "Reject all deposits" */}
-                  <div className="flex items-center space-x-2 mt-4">
-                    <Switch
-                      checked={rejectAllDeposits}
-                      onCheckedChange={(checked) => setValue("depositPolicies.rejectAllDeposits", checked)}
-                      id="reject-all-deposits"
-                    />
-                    <Label htmlFor="reject-all-deposits">Reject all deposits</Label>
                   </div>
                 </div>
               </div>

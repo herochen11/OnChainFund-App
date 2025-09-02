@@ -23,7 +23,10 @@ export async function OverviewTab({ vault, deployment }: OverviewTabProps) {
         {/* Pass fetched data to child components */}
         <VaultBasicInfo data={vaultData.basicInfo} vault={vault} />
         <VaultOwnership data={vaultData.ownership} />
-        <VaultLiveData data={vaultData.liveData} />
+        <VaultLiveData 
+          data={vaultData.liveData} 
+          {...(vaultData.basicInfo?.denominationSymbol && { denominationSymbol: vaultData.basicInfo.denominationSymbol })}
+        />
       </div>
     );
   } catch (error) {
@@ -81,10 +84,11 @@ function VaultOwnership({ data }: { data: any }) {
 }
 
 // Live data component - receives data as prop
-function VaultLiveData({ data }: { data: any }) {
+function VaultLiveData({ data, denominationSymbol }: { data: any; denominationSymbol?: string }) {
   
+  const assetSymbol = denominationSymbol || "tokens";
   const totalSupplyDisplay = data?.formattedTotalSupply 
-    ? `${parseFloat(data.formattedTotalSupply).toFixed(4)} shares`
+    ? `${parseFloat(data.formattedTotalSupply).toFixed(4)} ${assetSymbol}`
     : "Error loading";
 
   return (

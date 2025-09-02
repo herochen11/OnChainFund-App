@@ -15,8 +15,11 @@ export function getRpcUrl(network: Network) {
         ? `https://polygon-mainnet.infura.io/v3/${platformConfig.infuraApiKey}`
         : `/api/rpc/polygon`;
     case "sepolia":
+      // Use public Sepolia RPC as fallback if Infura fails
       return isServer
-        ? `https://sepolia.infura.io/v3/${platformConfig.infuraApiKey}`
+        ? platformConfig.infuraApiKey && platformConfig.infuraApiKey !== '<YOUR API KEY>'
+          ? `https://sepolia.infura.io/v3/${platformConfig.infuraApiKey}`
+          : 'https://rpc.sepolia.org'
         : `/api/rpc/sepolia`;
     default:
       throw new Error(`Unsupported network: ${network}`);

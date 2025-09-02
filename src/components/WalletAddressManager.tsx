@@ -114,9 +114,7 @@ export function WalletAddressManager({
       )}
 
       {/* Address List */}
-      {addresses.length === 0 ? (
-        <p className="text-red-500 text-sm">Please specify some addresses or choose "Disallow All"</p>
-      ) : (
+      {addresses.length > 0 && (
         <div className="space-y-2">
           {addresses.map((address, index) => (
             <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">

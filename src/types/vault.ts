@@ -1,5 +1,16 @@
 // Shared type definitions for vault creation and configuration
 import { type Address } from "viem"
+// Import policy types from the dedicated policy types file
+import type {
+  VaultPolicyConfiguration,
+  PolicyTypeId,
+  POLICY_TYPES,
+  POLICY_CATEGORIES,
+  EncodedPolicy,
+  VaultPolicyData,
+  PolicyValidationResult,
+  PolicyRecommendation
+} from './policies'
 
 export interface FeeDetail {
   enabled: boolean;
@@ -17,35 +28,17 @@ export interface VaultFees {
   exit: FeeDetail;
 }
 
-export interface VaultPolicy {
-  type: string;
-  settings: string;
-}
-
-// Policy configuration interfaces
-export interface VaultDepositPolicies {
-  limitWalletsEnabled?: boolean;
-  depositLimitsEnabled?: boolean;
-  allowedWallets?: Address[];
-  minDeposit?: string;
-  maxDeposit?: string;
-  rejectAllDeposits?: boolean;
-}
-
-export interface VaultSharesPolicies {
-  restrictSharesTransfer?: boolean;
-  allowedTransferWallets?: Address[];
-}
-
+// Clean vault form data structure
 export interface CreateVaultFormData {
   vaultName: string;
   vaultSymbol: string;
   denominationAsset: string;
+  sharesLockUpPeriod: {
+    value: string; // The numeric value (e.g., "24", "0.5")
+    unit: 'minutes' | 'hours' | 'days' | 'weeks'; // The time unit
+  };
   fees: VaultFees;
-  policies: VaultPolicy[];
-  // Policy configurations
-  depositPolicies?: VaultDepositPolicies;
-  sharesPolicies?: VaultSharesPolicies;
+  policies: VaultPolicyConfiguration;
 }
 
 // Props interface for components that need vault form data
@@ -99,3 +92,15 @@ export const FEE_TYPES = [
 ] as const;
 
 export type FeeTypeId = typeof FEE_TYPES[number]['id'];
+
+// Re-export policy types for convenience
+export type {
+  VaultPolicyConfiguration,
+  PolicyTypeId,
+  POLICY_TYPES,
+  POLICY_CATEGORIES,
+  EncodedPolicy,
+  VaultPolicyData,
+  PolicyValidationResult,
+  PolicyRecommendation
+} from './policies';
